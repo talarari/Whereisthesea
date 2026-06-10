@@ -60,6 +60,11 @@ async function playRound({ alpha, press }) {
     title: press ? await page.textContent("#resultTitle") : null,
     detail: press ? await page.textContent("#resultDetail") : null,
     demoVisible: await page.isVisible("#demoControls"),
+    gl3d: await page.evaluate(() => ({
+      enabled: document.body.classList.contains("gl"),
+      canvas: !!document.getElementById("gl"),
+      sceneOn: typeof SCENE3D !== "undefined" && SCENE3D.enabled,
+    })),
     arrowReady: await page.evaluate(() =>
       document.getElementById("aimArrow").classList.contains("ready")),
   };
@@ -75,6 +80,8 @@ console.log("— round 1: Tel Aviv, pointing WEST (alpha=90 → heading 270) —
   check("blind UI: no degrees or cardinal letters shown during play",
         !/\d+°/.test(r.gameText) && !/\b[NESW]{1,3}\b/.test(r.gameText));
   check("aim arrow signals compass lock", r.arrowReady);
+  check(`3D ocean scene running (got ${JSON.stringify(r.gl3d)})`,
+        r.gl3d.enabled && r.gl3d.canvas && r.gl3d.sceneOn);
   check(`verdict is success (got "${r.title}")`, /found the sea/i.test(r.title));
   check("demo mode NOT triggered (real sensor data used)", !r.demoVisible);
 }
