@@ -48,24 +48,24 @@ async function playRound({ alpha, press, skipCine }) {
   const heading = Number(await page.evaluate(() => document.body.dataset.heading));
   // blind mode: the UI must never reveal the heading or cardinal directions
   const gameText = await page.textContent("#screen-game");
-  let globeMsg = null;
+  let verdictStamp = null;
   if (press) {
     await page.click("#btnReady");
     if (skipCine) {
-      // tap twice: skip the launch cinematic, then the globe reveal
+      // tap twice: skip the launch cinematic, then the verdict stamp
       await page.waitForTimeout(400);
       await page.mouse.click(200, 200);
       await page.waitForTimeout(300);
       await page.mouse.click(200, 200);
     } else {
-      // let the full cinematic play: launch -> globe message -> result
-      await page.waitForSelector("#globeMsg", { state: "visible", timeout: 10000 });
-      globeMsg = await page.textContent("#globeMsg");
+      // let the full cinematic play: launch -> verdict stamp -> result
+      await page.waitForSelector("#verdictStamp", { state: "visible", timeout: 10000 });
+      verdictStamp = await page.textContent("#verdictText");
     }
     await page.waitForSelector("#screen-result.active", { timeout: 15000 });
   }
   const state = {
-    globeMsg,
+    verdictStamp,
     heading,
     gameText,
     errors,
@@ -96,8 +96,8 @@ console.log("— round 1: Tel Aviv, pointing WEST (alpha=90 → heading 270) —
   check(`3D ocean scene running (got ${JSON.stringify(r.gl3d)})`,
         r.gl3d.enabled && r.gl3d.canvas && r.gl3d.sceneOn);
   check(`verdict is success (got "${r.title}")`, /found the sea/i.test(r.title));
-  check(`globe reveal played with message (got "${r.globeMsg}")`,
-        r.globeMsg !== null && /sea|Mediterranean/i.test(r.globeMsg));
+  check(`verdict stamp shown (got "${r.verdictStamp}")`,
+        r.verdictStamp !== null && /FOUND IT/.test(r.verdictStamp));
   check("demo mode NOT triggered (real sensor data used)", !r.demoVisible);
 }
 
