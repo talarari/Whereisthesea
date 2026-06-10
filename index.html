@@ -643,7 +643,8 @@ const SCENE3D = (() => {
   let storm = 0, stormTarget = 0, shake = 0;
   let cine = null;            // launch cinematic state {t0, success, cb, splashed}
   const boats = [], gulls = [], clouds = [];
-  let buoy = null;
+  let buoy = null, kayaker = null, kPaddle = null;
+  const FACE_URI = "data:image/jpeg;base64,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";
 
   // time-of-day palettes (?tod=day|sunset|night to preview)
   const PAL = {
@@ -864,6 +865,52 @@ const SCENE3D = (() => {
     buoy.position.set(-7.5, .4, -14);
     scene.add(buoy);
 
+    // --- the kayaker: the challenger himself, paddling across the bay ---
+    kayaker = new THREE.Group();
+    const kHull = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10),
+      new THREE.MeshStandardMaterial({ color: 0xe06a28, roughness: .5 }));
+    kHull.scale.set(2.7, .35, .6);
+    kHull.position.y = .15;
+    const kTorso = new THREE.Mesh(new THREE.CylinderGeometry(.26, .34, .8, 10),
+      new THREE.MeshStandardMaterial({ color: 0x39404f, roughness: .8 })); // the tank top
+    kTorso.position.y = .8;
+    const skin = new THREE.MeshStandardMaterial({ color: 0xc9905e, roughness: .7 });
+    const mkArm = side => {
+      const a = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .62, 8), skin);
+      a.position.set(.28, 1.05, side * .3);
+      a.rotation.z = -1.1; a.rotation.y = side * .25;
+      return a;
+    };
+    // head: his face on the bow-facing side of a box, hair tone elsewhere,
+    // turned a little toward the camera
+    const faceTex = new THREE.Texture();
+    {
+      const im = new Image();
+      im.onload = () => { faceTex.image = im; faceTex.needsUpdate = true; };
+      im.src = FACE_URI;
+    }
+    const hair = new THREE.MeshStandardMaterial({ color: 0x241a12, roughness: .9 });
+    const faceMat = new THREE.MeshBasicMaterial({ map: faceTex });
+    const kHead = new THREE.Mesh(new THREE.BoxGeometry(.62, .72, .62),
+      [faceMat, hair, hair, hair, hair, hair]); // +x face = direction of travel
+    kHead.position.y = 1.58;
+    kHead.rotation.y = -.75; // glance toward the player
+    kPaddle = new THREE.Group();
+    const kShaft = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 2.7, 8),
+      new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: .6 }));
+    kShaft.rotation.x = Math.PI / 2; // across the kayak (z), blades over each side
+    const kBladeGeo = new THREE.BoxGeometry(.06, .68, .4);
+    const kBladeMat = new THREE.MeshStandardMaterial({ color: 0xf2d54f, roughness: .5 });
+    const kb1 = new THREE.Mesh(kBladeGeo, kBladeMat); kb1.position.z = 1.45;
+    const kb2 = new THREE.Mesh(kBladeGeo, kBladeMat); kb2.position.z = -1.45;
+    kPaddle.add(kShaft, kb1, kb2);
+    kPaddle.position.set(.3, 1.15, 0);
+    kayaker.add(kHull, kTorso, mkArm(1), mkArm(-1), kHead, kPaddle);
+    kayaker.scale.setScalar(2.0);
+    kayaker.rotation.y = -.45; // angled so the paddle and face read on screen
+    kayaker.position.set(0, .2, -15);
+    scene.add(kayaker);
+
     // --- the aim arrow: big flat chevron pointing away from the player ---
     arrowMat = new THREE.MeshStandardMaterial({
       color: 0xc9d6e2, metalness: .75, roughness: .3, emissive: 0x232c36, emissiveIntensity: .6
@@ -1021,6 +1068,13 @@ const SCENE3D = (() => {
     buoy.position.y = .25 + Math.sin(t * 1.1 + 2) * .35;
     buoy.rotation.z = Math.sin(t * .9) * .08;
     buoy.rotation.x = Math.sin(t * .7 + 1) * .06;
+
+    kayaker.position.x = -45 + (((t * 2.0 + 39) % 90) + 90) % 90;
+    kayaker.position.y = .2 + Math.sin(t * 1.3) * .25;
+    kayaker.rotation.x = Math.sin(t * 2.4) * .07;   // roll with each stroke
+    kayaker.rotation.z = Math.sin(t * 1.1) * .04;   // pitch over the swell
+    kayaker.rotation.y = -.45;
+    kPaddle.rotation.x = Math.sin(t * 2.4) * .55;   // alternate blade dips
 
     const cam = { cx: 0, cy: 3.1, cz: 8.5, lx: 0, ly: 1.5, lz: -40 };
     if (phase === "intro" || phase === "create") {
