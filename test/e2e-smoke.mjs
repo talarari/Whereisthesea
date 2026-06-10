@@ -44,21 +44,24 @@ async function playRound({ alpha, press }) {
       "deviceorientationabsolute", { alpha: a, beta: 12, gamma: -4, absolute: true }));
     fire(); window.__fireTimer = setInterval(fire, 100);
   }, alpha);
-  await page.waitForFunction(() =>
-    document.getElementById("headingReadout").textContent.includes("°") &&
-    !document.getElementById("headingReadout").textContent.includes("--"));
-  const readout = await page.textContent("#headingReadout");
+  await page.waitForFunction(() => document.body.dataset.heading !== undefined);
+  const heading = Number(await page.evaluate(() => document.body.dataset.heading));
+  // blind mode: the UI must never reveal the heading or cardinal directions
+  const gameText = await page.textContent("#screen-game");
   if (press) {
     await page.click("#btnReady");
     await page.waitForSelector("#screen-result.active");
   }
   const state = {
-    readout,
+    heading,
+    gameText,
     errors,
     timer: await page.textContent("#timer"),
     title: press ? await page.textContent("#resultTitle") : null,
     detail: press ? await page.textContent("#resultDetail") : null,
     demoVisible: await page.isVisible("#demoControls"),
+    arrowReady: await page.evaluate(() =>
+      document.getElementById("aimArrow").classList.contains("ready")),
   };
   await ctx.close();
   return state;
@@ -68,7 +71,10 @@ console.log("— round 1: Tel Aviv, pointing WEST (alpha=90 → heading 270) —
 {
   const r = await playRound({ alpha: 90, press: true });
   check(`no JS errors (${r.errors.join("; ") || "clean"})`, r.errors.length === 0);
-  check(`heading readout shows ~270 W (got "${r.readout}")`, /27\d° W|26\d° W/.test(r.readout));
+  check(`internal heading ≈ 270 (got ${r.heading})`, r.heading > 264 && r.heading < 276);
+  check("blind UI: no degrees or cardinal letters shown during play",
+        !/\d+°/.test(r.gameText) && !/\b[NESW]{1,3}\b/.test(r.gameText));
+  check("aim arrow signals compass lock", r.arrowReady);
   check(`verdict is success (got "${r.title}")`, /found the sea/i.test(r.title));
   check("demo mode NOT triggered (real sensor data used)", !r.demoVisible);
 }
@@ -76,9 +82,9 @@ console.log("— round 1: Tel Aviv, pointing WEST (alpha=90 → heading 270) —
 console.log("— round 2: Tel Aviv, pointing EAST (alpha=270 → heading 90) —");
 {
   const r = await playRound({ alpha: 270, press: true });
-  check(`heading readout shows ~90 E (got "${r.readout}")`, /9\d° E|8\d° E/.test(r.readout));
+  check(`internal heading ≈ 90 (got ${r.heading})`, r.heading > 84 && r.heading < 96);
   check(`verdict is failure (got "${r.title}")`, /lost/i.test(r.title));
-  check(`failure tells where the sea was (got "${r.detail}")`, /W \(2\d\d°\)/.test(r.detail));
+  check(`failure reveals where the sea was (got "${r.detail}")`, /W \(2\d\d°\)/.test(r.detail));
 }
 
 console.log("— round 3: timer ticks and timeout fails the game —");

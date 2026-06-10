@@ -43,15 +43,12 @@
   @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
 
   .compass-wrap { position: relative; width: min(72vw, 300px); height: min(72vw, 300px); }
-  .aim {
-    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
-    width: 0; height: 0; z-index: 3;
-    border-left: 14px solid transparent; border-right: 14px solid transparent;
-    border-top: 20px solid #ffd966;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,.5));
-  }
-  #rose { width: 100%; height: 100%; will-change: transform; }
-  #headingReadout { font-size: 1.3rem; font-weight: 700; letter-spacing: .04em; min-height: 1.5em; }
+  #aimArrow { width: 100%; height: 100%; }
+  #aimArrow .arrow { fill: rgba(255,255,255,.35); transition: fill .4s; }
+  #aimArrow.ready .arrow { fill: #ffd966; }
+  #aimArrow.ready { animation: breathe 2s ease-in-out infinite; }
+  @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+  #compassState { font-size: .95rem; font-weight: 600; min-height: 1.4em; opacity: .9; }
   #statusMsg { font-size: .92rem; opacity: .85; min-height: 2.6em; max-width: 320px; line-height: 1.3; }
 
   /* ---- result ---- */
@@ -107,11 +104,17 @@
 <div class="screen" id="screen-game">
   <div id="timer">30</div>
   <div class="compass-wrap">
-    <div class="aim"></div>
-    <svg id="rose" viewBox="0 0 200 200"></svg>
+    <!-- blind aim: no cardinal directions, no degrees — just point and trust yourself -->
+    <svg id="aimArrow" viewBox="0 0 200 200" aria-label="aim arrow">
+      <circle cx="100" cy="100" r="96" fill="rgba(255,255,255,.07)"
+              stroke="rgba(255,255,255,.45)" stroke-width="2"/>
+      <circle cx="100" cy="100" r="78" fill="none"
+              stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+      <polygon class="arrow" points="100,22 138,96 112,96 112,170 88,170 88,96 62,96"/>
+    </svg>
   </div>
-  <div id="headingReadout">--°</div>
-  <div id="statusMsg">Getting your compass ready…</div>
+  <div id="compassState">⏳ Waking up the compass…</div>
+  <div id="statusMsg"></div>
   <div id="demoControls">
     <label for="demoSlider">No compass found — demo mode: drag to turn</label>
     <input type="range" id="demoSlider" min="0" max="359" value="0">
@@ -433,49 +436,6 @@ if (typeof module !== "undefined") module.exports.COMPASS_MATH = COMPASS_MATH;
   }
   const pageUrl = () => location.origin + location.pathname;
 
-  // ---------- compass rose ----------
-  (function buildRose() {
-    const svg = $("rose");
-    const NS = "http://www.w3.org/2000/svg";
-    const mk = (tag, attrs, text) => {
-      const el = document.createElementNS(NS, tag);
-      for (const k in attrs) el.setAttribute(k, attrs[k]);
-      if (text) el.textContent = text;
-      return el;
-    };
-    svg.appendChild(mk("circle", { cx: 100, cy: 100, r: 96, fill: "rgba(255,255,255,.07)",
-      stroke: "rgba(255,255,255,.55)", "stroke-width": 2 }));
-    svg.appendChild(mk("circle", { cx: 100, cy: 100, r: 70, fill: "none",
-      stroke: "rgba(255,255,255,.18)", "stroke-width": 1 }));
-    const g = mk("g", { id: "roseSpin" });
-    for (let a = 0; a < 360; a += 15) {
-      const main = a % 90 === 0, mid = a % 45 === 0;
-      const r1 = main ? 78 : (mid ? 84 : 89), r2 = 95;
-      const ra = a * Math.PI / 180;
-      g.appendChild(mk("line", {
-        x1: 100 + r1 * Math.sin(ra), y1: 100 - r1 * Math.cos(ra),
-        x2: 100 + r2 * Math.sin(ra), y2: 100 - r2 * Math.cos(ra),
-        stroke: main ? "#ffd966" : "rgba(255,255,255,.6)",
-        "stroke-width": main ? 3 : (mid ? 2 : 1)
-      }));
-    }
-    const lbl = [["N", 0], ["E", 90], ["S", 180], ["W", 270]];
-    for (const [t, a] of lbl) {
-      const ra = a * Math.PI / 180, r = 58;
-      g.appendChild(mk("text", {
-        x: 100 + r * Math.sin(ra), y: 100 - r * Math.cos(ra) + 7,
-        "text-anchor": "middle", "font-size": t === "N" ? 24 : 19,
-        "font-weight": 800, fill: t === "N" ? "#ff6b6b" : "#eaf6fb",
-        transform: `rotate(${a} ${100 + r * Math.sin(ra)} ${100 - r * Math.cos(ra)})`
-      }, t));
-    }
-    // needle (red points north, stays inside the rotating group)
-    g.appendChild(mk("polygon", { points: "100,38 94,100 106,100", fill: "#ff6b6b" }));
-    g.appendChild(mk("polygon", { points: "100,162 94,100 106,100", fill: "#cfd8dc" }));
-    g.appendChild(mk("circle", { cx: 100, cy: 100, r: 6, fill: "#ffd966" }));
-    svg.appendChild(g);
-  })();
-
   // ---------- compass sensor ----------
   let heading = null;          // smoothed, screen-compensated, 0..360
   let sensorOk = false;
@@ -513,12 +473,17 @@ if (typeof module !== "undefined") module.exports.COMPASS_MATH = COMPASS_MATH;
 
   function renderHeading() {
     if (heading === null) return;
-    $("roseSpin").setAttribute("transform", `rotate(${-heading} 100 100)`);
-    $("headingReadout").textContent =
-      `${Math.round(heading)}° ${GEO.cardinal(heading)}`;
+    // Blind mode: never show the heading to the player. The value is kept
+    // on <body> as a data attribute for the verdict pipeline tests only.
+    document.body.dataset.heading = Math.round(heading);
+    $("aimArrow").classList.add("ready");
+    $("compassState").textContent = "🧭 Compass locked — you're flying blind. Trust your gut!";
   }
 
+  let compassStarted = false;
   async function startCompass() {
+    if (compassStarted) return; // replays reuse the live sensor stream
+    compassStarted = true;
     // iOS 13+: must request permission inside a user gesture
     if (typeof DeviceOrientationEvent !== "undefined" &&
         typeof DeviceOrientationEvent.requestPermission === "function") {
@@ -712,10 +677,7 @@ if (typeof module !== "undefined") module.exports.COMPASS_MATH = COMPASS_MATH;
   });
 
   $("btnStart").addEventListener("click", startGame);
-  $("btnRetry").addEventListener("click", () => {
-    heading = null; sensorOk && renderHeading();
-    startGame();
-  });
+  $("btnRetry").addEventListener("click", startGame);
 })();
 </script>
 </body>
