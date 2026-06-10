@@ -26,7 +26,7 @@ const check = (name, cond, extra = "") => {
 
 const browser = await chromium.launch();
 
-async function playRound({ alpha, press }) {
+async function playRound({ alpha, press, skipCine }) {
   const ctx = await browser.newContext({
     geolocation: { latitude: 32.08, longitude: 34.78 }, // Tel Aviv
     permissions: ["geolocation"],
@@ -48,11 +48,24 @@ async function playRound({ alpha, press }) {
   const heading = Number(await page.evaluate(() => document.body.dataset.heading));
   // blind mode: the UI must never reveal the heading or cardinal directions
   const gameText = await page.textContent("#screen-game");
+  let globeMsg = null;
   if (press) {
     await page.click("#btnReady");
-    await page.waitForSelector("#screen-result.active");
+    if (skipCine) {
+      // tap twice: skip the launch cinematic, then the globe reveal
+      await page.waitForTimeout(400);
+      await page.mouse.click(200, 200);
+      await page.waitForTimeout(300);
+      await page.mouse.click(200, 200);
+    } else {
+      // let the full cinematic play: launch -> globe message -> result
+      await page.waitForSelector("#globeMsg", { state: "visible", timeout: 10000 });
+      globeMsg = await page.textContent("#globeMsg");
+    }
+    await page.waitForSelector("#screen-result.active", { timeout: 15000 });
   }
   const state = {
+    globeMsg,
     heading,
     gameText,
     errors,
@@ -83,12 +96,14 @@ console.log("— round 1: Tel Aviv, pointing WEST (alpha=90 → heading 270) —
   check(`3D ocean scene running (got ${JSON.stringify(r.gl3d)})`,
         r.gl3d.enabled && r.gl3d.canvas && r.gl3d.sceneOn);
   check(`verdict is success (got "${r.title}")`, /found the sea/i.test(r.title));
+  check(`globe reveal played with message (got "${r.globeMsg}")`,
+        r.globeMsg !== null && /sea|Mediterranean/i.test(r.globeMsg));
   check("demo mode NOT triggered (real sensor data used)", !r.demoVisible);
 }
 
-console.log("— round 2: Tel Aviv, pointing EAST (alpha=270 → heading 90) —");
+console.log("— round 2: Tel Aviv, pointing EAST (alpha=270 → heading 90), tap-skip cinematic —");
 {
-  const r = await playRound({ alpha: 270, press: true });
+  const r = await playRound({ alpha: 270, press: true, skipCine: true });
   check(`internal heading ≈ 90 (got ${r.heading})`, r.heading > 84 && r.heading < 96);
   check(`verdict is failure (got "${r.title}")`, /lost/i.test(r.title));
   check(`failure reveals where the sea was (got "${r.detail}")`, /W \(2\d\d°\)/.test(r.detail));

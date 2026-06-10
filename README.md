@@ -8,8 +8,13 @@ Play → send the result screenshot back → challenge them back.
 
 ## How it works
 
-- The game is a **single self-contained `index.html`** — no build, no
-  dependencies, no server logic.
+- The game is a **single self-contained `index.html`** — no build, no CDN,
+  no server logic. Three.js is embedded inside the file.
+- **Full 3D presentation**: shader-animated ocean, time-of-day palettes
+  (day/sunset/night — preview with `?tod=night`), a storm that builds as the
+  timer runs out, a launch cinematic when you commit to an answer, and a
+  hologram globe reveal showing where you pointed vs. where the sea actually
+  was. Synthesized WebAudio sound — no audio assets.
 - It reads your location (with a fallback) and your phone's compass, then
   checks whether a great-circle ray in the direction you pointed actually
   reaches the Mediterranean, using a ~120-vertex polygon of the sea

@@ -122,6 +122,17 @@ console.log("— bearingToNearestSea sanity —");
         c.bearing < 45 || c.bearing > 315);
 }
 
+console.log("— degreesOffSea (the 'you were N° off' reveal) —");
+{
+  const off = GEO.degreesOffSea;
+  check(`Tel Aviv pointing W → 0° off (got ${off(32.08, 34.80, 270)})`, off(32.08, 34.80, 270) === 0);
+  check(`Tel Aviv pointing E → way off (got ${off(32.08, 34.80, 90)})`, off(32.08, 34.80, 90) >= 55);
+  check(`Jerusalem pointing 250 → small (got ${off(31.78, 35.22, 250)})`, off(31.78, 35.22, 250) <= 25);
+  check(`on a boat → 0° off any direction (got ${off(33.5, 33.0, 123)})`, off(33.5, 33.0, 123) === 0);
+  const a = off(31.78, 35.22, 290), b = off(31.78, 35.22, 200), c = off(31.78, 35.22, 110);
+  check(`monotonic as you turn away from the sea (${a} <= ${b} <= ${c})`, a <= b && b <= c);
+}
+
 console.log("— cardinal names —");
 check("0 → N", GEO.cardinal(0) === "N");
 check("270 → W", GEO.cardinal(270) === "W");
