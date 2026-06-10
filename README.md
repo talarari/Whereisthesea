@@ -1,0 +1,50 @@
+# Where is the Sea? 🌊🧭
+
+A WhatsApp challenge game: you get **30 seconds** to point your phone at the
+**Mediterranean Sea** from wherever you are. No maps, no hints — just your
+sense of direction.
+
+Play → send the result screenshot back → challenge them back.
+
+## How it works
+
+- The game is a **single self-contained `index.html`** — no build, no
+  dependencies, no server logic.
+- It reads your location (with a fallback) and your phone's compass, then
+  checks whether a great-circle ray in the direction you pointed actually
+  reaches the Mediterranean, using a ~120-vertex polygon of the sea
+  (Adriatic and Aegean included, Black Sea and Atlantic excluded).
+- Compass handling is platform-correct:
+  - **iOS**: `DeviceOrientationEvent.requestPermission()` inside the tap
+    gesture, then `webkitCompassHeading` (never `alpha`, which is unreliable
+    on iOS).
+  - **Android**: `deviceorientationabsolute` with a tilt-compensated
+    rotation-matrix conversion that works held flat or upright, with screen
+    rotation compensation and circular smoothing.
+- Results are shared as a generated screenshot via the native share sheet
+  (`navigator.share` with files), falling back to a `wa.me` text link.
+
+## Deploy (GitHub Pages)
+
+1. Repo → **Settings → Pages**.
+2. Source: **Deploy from a branch**, branch `main` (or this branch), folder `/ (root)`.
+3. Your game is live at `https://<user>.github.io/<repo>/`.
+
+HTTPS is required for the compass and geolocation APIs — GitHub Pages
+provides it out of the box.
+
+## Challenge someone
+
+Open the game → **Challenge a friend** → it composes a WhatsApp message with
+a link like `...?by=YourName`, so the opening screen shows who dared them.
+
+## Tests
+
+The geo/compass logic lives in marked `<script>` blocks inside `index.html`
+and is verified by extracting and executing them:
+
+```bash
+node test/run-tests.mjs    # 100+ geography & compass-math assertions
+node test/e2e-smoke.mjs    # Playwright: plays the game in Chromium with
+                           # mocked geolocation + synthetic sensor events
+```

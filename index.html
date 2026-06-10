@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#03263b">
+<title>Where is the Sea? 🌊</title>
+<meta property="og:title" content="Where is the Sea? 🌊">
+<meta property="og:description" content="You have 30 seconds to point your phone at the Mediterranean Sea. Think you can?">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(180deg, #03263b 0%, #064a6e 55%, #0a6e93 100%);
+    color: #eaf6fb;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center;
+    user-select: none; -webkit-user-select: none;
+  }
+  .screen { display: none; flex-direction: column; align-items: center; justify-content: center;
+            width: 100%; height: 100%; padding: 24px; gap: 18px; }
+  .screen.active { display: flex; }
+  h1 { font-size: 2rem; line-height: 1.2; text-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  .sub { font-size: 1.05rem; opacity: .9; max-width: 320px; line-height: 1.45; }
+  .btn {
+    font-size: 1.2rem; font-weight: 700; color: #03263b;
+    background: linear-gradient(180deg, #ffd966, #f5b942);
+    border: none; border-radius: 999px; padding: 16px 36px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35); cursor: pointer;
+  }
+  .btn:active { transform: scale(.96); }
+  .btn.secondary { background: rgba(255,255,255,.14); color: #eaf6fb; box-shadow: none;
+                   border: 1px solid rgba(255,255,255,.35); }
+  .btn.whatsapp { background: linear-gradient(180deg, #34d367, #1faa4e); color: #fff; }
+  .wave { font-size: 3.2rem; }
+  #challengerLine { font-size: 1.15rem; font-weight: 600; color: #ffd966; min-height: 1.4em; }
+
+  /* ---- game screen ---- */
+  #timer { font-variant-numeric: tabular-nums; font-size: 3.4rem; font-weight: 800;
+           text-shadow: 0 2px 10px rgba(0,0,0,.45); }
+  #timer.low { color: #ff6b6b; animation: pulse .5s infinite alternate; }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
+
+  .compass-wrap { position: relative; width: min(72vw, 300px); height: min(72vw, 300px); }
+  .aim {
+    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0; z-index: 3;
+    border-left: 14px solid transparent; border-right: 14px solid transparent;
+    border-top: 20px solid #ffd966;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,.5));
+  }
+  #rose { width: 100%; height: 100%; will-change: transform; }
+  #headingReadout { font-size: 1.3rem; font-weight: 700; letter-spacing: .04em; min-height: 1.5em; }
+  #statusMsg { font-size: .92rem; opacity: .85; min-height: 2.6em; max-width: 320px; line-height: 1.3; }
+
+  /* ---- result ---- */
+  #resultEmoji { font-size: 4.2rem; }
+  #resultTitle { font-size: 2.1rem; }
+  #resultDetail { font-size: 1.05rem; opacity: .92; max-width: 330px; line-height: 1.5; }
+  #resultCanvas { display: none; }
+
+  .footer { position: fixed; bottom: 10px; width: 100%; text-align: center;
+            font-size: .75rem; opacity: .5; }
+  input[type=text] {
+    font-size: 1.1rem; padding: 12px 16px; border-radius: 12px; border: none;
+    width: min(80vw, 300px); text-align: center;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .rotate-overlay {
+    display: none; position: fixed; inset: 0; z-index: 50; background: #03263b;
+    flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    font-size: 1.3rem; padding: 30px; text-align: center;
+  }
+  @media (orientation: landscape) and (max-height: 500px) {
+    .rotate-overlay { display: flex; }
+  }
+  /* demo mode slider (no-sensor fallback) */
+  #demoControls { display: none; flex-direction: column; gap: 6px; align-items: center; width: 100%; }
+  #demoControls input { width: min(80vw, 300px); }
+</style>
+</head>
+<body>
+
+<div class="rotate-overlay">📱 Please rotate your phone to portrait to play</div>
+
+<!-- ============ INTRO ============ -->
+<div class="screen active" id="screen-intro">
+  <div class="wave">🌊🧭</div>
+  <h1>Where is the Sea?</h1>
+  <div id="challengerLine"></div>
+  <p class="sub">You'll get <b>30 seconds</b> to point your phone at the <b>Mediterranean Sea</b>, from wherever you are. No maps. No hints. Just you and your sense of direction.</p>
+  <button class="btn" id="btnStart">Accept the Challenge</button>
+  <button class="btn secondary" id="btnChallenge">Challenge a friend instead</button>
+</div>
+
+<!-- ============ CHALLENGE CREATOR ============ -->
+<div class="screen" id="screen-create">
+  <h1>Challenge a friend</h1>
+  <p class="sub">Your name (so they know who dared them):</p>
+  <input type="text" id="nameInput" maxlength="25" placeholder="Your name">
+  <button class="btn whatsapp" id="btnSendChallenge">Send via WhatsApp 💬</button>
+  <button class="btn secondary" id="btnBackIntro">Back</button>
+</div>
+
+<!-- ============ GAME ============ -->
+<div class="screen" id="screen-game">
+  <div id="timer">30</div>
+  <div class="compass-wrap">
+    <div class="aim"></div>
+    <svg id="rose" viewBox="0 0 200 200"></svg>
+  </div>
+  <div id="headingReadout">--°</div>
+  <div id="statusMsg">Getting your compass ready…</div>
+  <div id="demoControls">
+    <label for="demoSlider">No compass found — demo mode: drag to turn</label>
+    <input type="range" id="demoSlider" min="0" max="359" value="0">
+  </div>
+  <button class="btn" id="btnReady">🌊 I'm pointing at the sea!</button>
+</div>
+
+<!-- ============ RESULT ============ -->
+<div class="screen" id="screen-result">
+  <div id="resultEmoji"></div>
+  <h1 id="resultTitle"></h1>
+  <p id="resultDetail"></p>
+  <div class="row">
+    <button class="btn whatsapp" id="btnShare">Share result 💬</button>
+    <button class="btn secondary" id="btnRetry">Play again</button>
+  </div>
+  <button class="btn secondary" id="btnChallengeBack">Challenge them back 😏</button>
+</div>
+
+<canvas id="resultCanvas" width="720" height="900"></canvas>
+<div class="footer">Where is the Sea? · works best outdoors, away from metal</div>
+
+<!-- ================= GEO LOGIC (pure functions, testable) ================= -->
+<script id="geo-logic">
+"use strict";
+const GEO = (() => {
+  const R = 6371; // km, Earth radius
+  const rad = d => d * Math.PI / 180;
+  const deg = r => r * 180 / Math.PI;
+
+  // Mediterranean Sea polygon [lat, lng], traced: Gibraltar -> European
+  // north shore (around Italy, around Greece incl. Adriatic + Aegean) ->
+  // Turkish coast -> Levant -> North African coast -> back to Gibraltar.
+  // Black Sea is excluded (boundary closes at the Dardanelles).
+  // Major islands are treated as sea (acceptable for this game).
+  const MED = [
+    [36.00, -5.40],  // Gibraltar (Europe side)
+    [36.55, -4.62],  // Marbella
+    [36.72, -3.50],  // Motril
+    [36.83, -2.40],  // Almeria
+    [37.58, -0.90],  // Cartagena
+    [38.55, -0.05],  // Alicante/Benidorm
+    [39.45, -0.25],  // Valencia
+    [40.45,  0.45],  // Ebro delta
+    [41.30,  2.20],  // Barcelona
+    [42.40,  3.15],  // Cap de Creus
+    [43.25,  3.40],  // Sète
+    [43.30,  5.35],  // Marseille
+    [43.55,  7.05],  // Cannes
+    [43.95,  8.15],  // Imperia
+    [44.38,  8.90],  // Genoa
+    [43.95,  10.20], // Viareggio
+    [42.75,  10.95], // Tuscan coast
+    [41.70,  12.30], // Rome coast (Ostia)
+    [40.85,  14.15], // Naples
+    [40.05,  15.40], // Cilento
+    [38.95,  16.05], // Calabria west
+    [38.20,  15.65], // Reggio Calabria (Strait of Messina)
+    [37.95,  16.10], // toe of Italy (Ionian side)
+    [38.90,  16.60], // Catanzaro gulf
+    [39.05,  17.15], // Crotone
+    [40.35,  17.20], // Taranto
+    [39.80,  18.38], // Santa Maria di Leuca (heel)
+    [40.65,  17.95], // Brindisi
+    [41.13,  16.85], // Bari
+    [41.92,  16.18], // Gargano
+    [42.55,  14.10], // Pescara
+    [43.62,  13.50], // Ancona
+    [44.95,  12.55], // Po delta
+    [45.43,  12.45], // Venice
+    [45.70,  13.60], // Trieste
+    [45.10,  13.65], // Istria (Rovinj)
+    [44.05,  15.15], // Zadar
+    [43.50,  16.40], // Split
+    [42.64,  18.10], // Dubrovnik
+    [42.05,  19.10], // Bar (Montenegro)
+    [41.30,  19.40], // Durrës
+    [40.15,  19.65], // Vlorë
+    [39.65,  19.90], // Corfu
+    [38.95,  20.75], // Preveza
+    [38.30,  21.40], // Gulf of Patras mouth
+    [37.65,  21.30], // Pyrgos coast
+    [36.80,  21.70], // SW Peloponnese
+    [36.40,  22.48], // Cape Tainaron
+    [36.43,  23.20], // Cape Maleas
+    [37.40,  23.20], // Hydra area
+    [37.90,  23.55], // Athens (Piraeus)
+    [38.85,  23.65], // Euboea inner coast
+    [39.05,  22.70], // Gulf of Pagasae
+    [39.95,  22.65], // Mt Olympus coast
+    [40.50,  22.90], // Thessaloniki
+    [40.30,  23.70], // Chalkidiki
+    [40.75,  24.70], // Kavala
+    [40.85,  25.85], // Alexandroupoli
+    [40.45,  26.20], // Gallipoli peninsula
+    [40.05,  26.20], // Dardanelles mouth (Black Sea excluded)
+    [39.45,  26.10], // Edremit gulf
+    [38.65,  26.75], // Çeşme/Izmir
+    [37.95,  27.25], // Kuşadası
+    [37.35,  27.20], // Bodrum
+    [36.85,  28.25], // Marmaris
+    [36.55,  29.10], // Fethiye
+    [36.25,  29.95], // Kaş/Finike
+    [36.85,  30.75], // Antalya
+    [36.10,  32.30], // Alanya/Anamur
+    [36.30,  33.50], // Silifke
+    [36.75,  34.60], // Mersin
+    [36.55,  35.55], // Adana coast (Yumurtalık)
+    [36.60,  36.20], // Iskenderun
+    [35.90,  35.90], // Syrian coast (north)
+    [35.50,  35.75], // Latakia
+    [34.85,  35.90], // Tartus
+    [34.45,  35.83], // Tripoli (Lebanon)
+    [33.90,  35.48], // Beirut
+    [33.27,  35.20], // Tyre
+    [32.92,  35.07], // Acre/Haifa bay
+    [32.83,  34.96], // Haifa (Carmel head)
+    [32.48,  34.88], // Netanya
+    [32.08,  34.76], // Tel Aviv
+    [31.67,  34.55], // Ashkelon
+    [31.32,  34.22], // Gaza/Rafah
+    [31.05,  33.10], // North Sinai coast
+    [31.28,  32.30], // Port Said
+    [31.50,  31.84], // Damietta (Nile delta tip)
+    [31.45,  30.36], // Rosetta
+    [31.20,  29.88], // Alexandria
+    [30.85,  29.00], // El Alamein coast
+    [31.35,  27.20], // Marsa Matruh
+    [31.60,  25.15], // Sallum
+    [32.08,  23.95], // Tobruk
+    [32.92,  21.70], // Derna/Jebel Akhdar coast
+    [32.75,  20.95], // Apollonia
+    [32.10,  20.05], // Benghazi
+    [30.75,  18.50], // Gulf of Sidra (south)
+    [31.20,  16.60], // Sirte west
+    [32.38,  15.10], // Misrata
+    [32.90,  13.18], // Tripoli (Libya)
+    [32.95,  12.10], // Zuwara
+    [33.50,  11.05], // Djerba
+    [33.90,  10.10], // Gabès
+    [34.73,  10.77], // Sfax
+    [35.78,  10.83], // Monastir
+    [36.40,  10.55], // Cap Bon (inner)
+    [37.08,  11.05], // Cap Bon tip
+    [37.28,  10.25], // Tunis bay
+    [37.35,   9.85], // Bizerte
+    [37.10,   8.60], // Tabarka
+    [36.95,   7.77], // Annaba
+    [37.08,   6.55], // Skikda
+    [36.82,   5.05], // Béjaïa
+    [36.80,   3.05], // Algiers
+    [36.52,   1.95], // Cherchell
+    [36.13,   0.30], // Mostaganem
+    [35.72,  -0.65], // Oran
+    [35.32,  -2.95], // Melilla
+    [35.25,  -3.95], // Al Hoceima
+    [35.78,  -5.30], // Ceuta (Africa side of strait)
+  ];
+
+  // Ray-cast point-in-polygon on [lat,lng] pairs (planar approx is fine
+  // at Mediterranean latitudes for a coarse polygon).
+  function inMediterranean(lat, lng) {
+    let inside = false;
+    for (let i = 0, j = MED.length - 1; i < MED.length; j = i++) {
+      const [yi, xi] = MED[i], [yj, xj] = MED[j];
+      if ((yi > lat) !== (yj > lat) &&
+          lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  }
+
+  // Great-circle destination point: from (lat,lng), initial bearing (deg),
+  // distance in km.
+  function destination(lat, lng, bearing, distKm) {
+    const f1 = rad(lat), l1 = rad(lng), brng = rad(bearing), dR = distKm / R;
+    const f2 = Math.asin(Math.sin(f1) * Math.cos(dR) +
+                         Math.cos(f1) * Math.sin(dR) * Math.cos(brng));
+    const l2 = l1 + Math.atan2(Math.sin(brng) * Math.sin(dR) * Math.cos(f1),
+                               Math.cos(dR) - Math.sin(f1) * Math.sin(f2));
+    return [deg(f2), ((deg(l2) + 540) % 360) - 180];
+  }
+
+  // Initial great-circle bearing from point 1 to point 2, degrees 0..360.
+  function bearingTo(lat1, lng1, lat2, lng2) {
+    const f1 = rad(lat1), f2 = rad(lat2), dl = rad(lng2 - lng1);
+    const y = Math.sin(dl) * Math.cos(f2);
+    const x = Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl);
+    return (deg(Math.atan2(y, x)) + 360) % 360;
+  }
+
+  function haversineKm(lat1, lng1, lat2, lng2) {
+    const f1 = rad(lat1), f2 = rad(lat2);
+    const dF = rad(lat2 - lat1), dL = rad(lng2 - lng1);
+    const a = Math.sin(dF / 2) ** 2 + Math.cos(f1) * Math.cos(f2) * Math.sin(dL / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  const MAX_RANGE_KM = 3500, STEP_KM = 12;
+
+  // Does a great-circle ray from (lat,lng) at `heading` reach the
+  // Mediterranean within MAX_RANGE_KM?
+  function rayHitsSea(lat, lng, heading) {
+    if (inMediterranean(lat, lng)) return true; // standing in/on the sea
+    for (let d = STEP_KM; d <= MAX_RANGE_KM; d += STEP_KM) {
+      const [la, lo] = destination(lat, lng, heading, d);
+      if (inMediterranean(la, lo)) return true;
+    }
+    return false;
+  }
+
+  const TOLERANCE_DEG = 20; // forgiveness either side of where they point
+
+  // Game verdict: success if any ray within ±TOLERANCE of the pointed
+  // heading reaches the sea.
+  function pointsAtSea(lat, lng, heading) {
+    for (let off = -TOLERANCE_DEG; off <= TOLERANCE_DEG; off += 5) {
+      if (rayHitsSea(lat, lng, (heading + off + 360) % 360)) return true;
+    }
+    return false;
+  }
+
+  // Bearing to the closest Mediterranean coast vertex — used only for the
+  // result message ("the sea was that way"), not for the verdict.
+  function bearingToNearestSea(lat, lng) {
+    let best = Infinity, bestB = 0, bestD = 0;
+    for (const [la, lo] of MED) {
+      const d = haversineKm(lat, lng, la, lo);
+      if (d < best) { best = d; bestB = bearingTo(lat, lng, la, lo); bestD = d; }
+    }
+    return { bearing: bestB, distanceKm: bestD };
+  }
+
+  function cardinal(b) {
+    const names = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+    return names[Math.round(((b % 360) + 360) % 360 / 22.5) % 16];
+  }
+
+  return { MED, inMediterranean, destination, bearingTo, haversineKm,
+           rayHitsSea, pointsAtSea, bearingToNearestSea, cardinal,
+           TOLERANCE_DEG };
+})();
+if (typeof module !== "undefined") module.exports = GEO;
+</script>
+
+<!-- ================= COMPASS LOGIC (pure heading math, testable) ================= -->
+<script id="compass-logic">
+"use strict";
+const COMPASS_MATH = (() => {
+  // Tilt-compensated compass heading from deviceorientation Euler angles
+  // (degrees), 0..360 clockwise from north. Derived from the spec's
+  // rotation matrix R = Rz(alpha)·Rx(beta)·Ry(gamma) with the Earth frame
+  // x=East, y=North, z=Up:
+  //   device top edge (y-axis) in Earth frame: E=-sinA·cosB, N=cosA·cosB
+  //   back camera (-z axis) in Earth frame:
+  //     E=-(cosA·sinG + sinA·sinB·cosG), N=-sinA·sinG + cosA·sinB·cosG
+  // The top-edge vector is what a flat "compass-style" hold points with,
+  // but it degenerates when the phone is upright (top points at the sky);
+  // the back-camera vector covers exactly that case. For an un-rolled
+  // phone both project to the same heading. The camera term is weighted
+  // by max(0, sin beta) so that device roll (gamma) cannot leak into the
+  // heading while the phone is held flat — flat reads are exact, upright
+  // reads use the camera, and the blend is smooth in between.
+  function headingFromEuler(alpha, beta, gamma) {
+    const d2r = Math.PI / 180;
+    const a = (alpha || 0) * d2r, b = (beta || 0) * d2r, g = (gamma || 0) * d2r;
+    const cA = Math.cos(a), sA = Math.sin(a);
+    const cB = Math.cos(b), sB = Math.sin(b);
+    const cG = Math.cos(g), sG = Math.sin(g);
+    const topE = -sA * cB,                 topN = cA * cB;
+    const camE = -(cA * sG + sA * sB * cG), camN = -sA * sG + cA * sB * cG;
+    const w = Math.max(0, sB);
+    let heading = Math.atan2(topE + w * camE, topN + w * camN);
+    if (heading < 0) heading += 2 * Math.PI;
+    return heading * 180 / Math.PI;
+  }
+
+  // Compensate for UI rotation: screen-up direction = device-top heading
+  // + screen angle (screen.orientation.angle: 90 when the device is
+  // turned counter-clockwise into landscape, so screen-up = device right
+  // edge = device-top + 90°).
+  function applyScreenAngle(heading, screenAngle) {
+    return ((heading + (screenAngle || 0)) % 360 + 360) % 360;
+  }
+
+  // Exponential smoothing on the unit circle (no 359→0 jump artifacts).
+  function makeSmoother(factor = 0.25) {
+    let sx = null, sy = null;
+    return function smooth(headingDeg) {
+      const r = headingDeg * Math.PI / 180;
+      const x = Math.sin(r), y = Math.cos(r);
+      if (sx === null) { sx = x; sy = y; }
+      else { sx += factor * (x - sx); sy += factor * (y - sy); }
+      return (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360;
+    };
+  }
+
+  return { headingFromEuler, applyScreenAngle, makeSmoother };
+})();
+if (typeof module !== "undefined") module.exports.COMPASS_MATH = COMPASS_MATH;
+</script>
+
+<!-- ================= APP ================= -->
+<script id="app">
+"use strict";
+(() => {
+  const $ = id => document.getElementById(id);
+  const screens = ["intro", "create", "game", "result"];
+  function show(name) {
+    for (const s of screens) $("screen-" + s).classList.toggle("active", s === name);
+  }
+
+  // ---------- challenge link ----------
+  const params = new URLSearchParams(location.search);
+  const challenger = (params.get("by") || "").slice(0, 30).trim();
+  if (challenger) {
+    $("challengerLine").textContent = `⚔️ ${challenger} challenged you!`;
+  }
+  const pageUrl = () => location.origin + location.pathname;
+
+  // ---------- compass rose ----------
+  (function buildRose() {
+    const svg = $("rose");
+    const NS = "http://www.w3.org/2000/svg";
+    const mk = (tag, attrs, text) => {
+      const el = document.createElementNS(NS, tag);
+      for (const k in attrs) el.setAttribute(k, attrs[k]);
+      if (text) el.textContent = text;
+      return el;
+    };
+    svg.appendChild(mk("circle", { cx: 100, cy: 100, r: 96, fill: "rgba(255,255,255,.07)",
+      stroke: "rgba(255,255,255,.55)", "stroke-width": 2 }));
+    svg.appendChild(mk("circle", { cx: 100, cy: 100, r: 70, fill: "none",
+      stroke: "rgba(255,255,255,.18)", "stroke-width": 1 }));
+    const g = mk("g", { id: "roseSpin" });
+    for (let a = 0; a < 360; a += 15) {
+      const main = a % 90 === 0, mid = a % 45 === 0;
+      const r1 = main ? 78 : (mid ? 84 : 89), r2 = 95;
+      const ra = a * Math.PI / 180;
+      g.appendChild(mk("line", {
+        x1: 100 + r1 * Math.sin(ra), y1: 100 - r1 * Math.cos(ra),
+        x2: 100 + r2 * Math.sin(ra), y2: 100 - r2 * Math.cos(ra),
+        stroke: main ? "#ffd966" : "rgba(255,255,255,.6)",
+        "stroke-width": main ? 3 : (mid ? 2 : 1)
+      }));
+    }
+    const lbl = [["N", 0], ["E", 90], ["S", 180], ["W", 270]];
+    for (const [t, a] of lbl) {
+      const ra = a * Math.PI / 180, r = 58;
+      g.appendChild(mk("text", {
+        x: 100 + r * Math.sin(ra), y: 100 - r * Math.cos(ra) + 7,
+        "text-anchor": "middle", "font-size": t === "N" ? 24 : 19,
+        "font-weight": 800, fill: t === "N" ? "#ff6b6b" : "#eaf6fb",
+        transform: `rotate(${a} ${100 + r * Math.sin(ra)} ${100 - r * Math.cos(ra)})`
+      }, t));
+    }
+    // needle (red points north, stays inside the rotating group)
+    g.appendChild(mk("polygon", { points: "100,38 94,100 106,100", fill: "#ff6b6b" }));
+    g.appendChild(mk("polygon", { points: "100,162 94,100 106,100", fill: "#cfd8dc" }));
+    g.appendChild(mk("circle", { cx: 100, cy: 100, r: 6, fill: "#ffd966" }));
+    svg.appendChild(g);
+  })();
+
+  // ---------- compass sensor ----------
+  let heading = null;          // smoothed, screen-compensated, 0..360
+  let sensorOk = false;
+  let lastSensorTs = 0;
+  let usingAbsolute = false;
+  const smooth = COMPASS_MATH.makeSmoother(0.3);
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  function screenAngle() {
+    if (screen.orientation && typeof screen.orientation.angle === "number")
+      return screen.orientation.angle;
+    return (typeof window.orientation === "number") ? window.orientation : 0;
+  }
+
+  function onOrientation(e) {
+    let raw = null;
+    if (isIOS && typeof e.webkitCompassHeading === "number" && e.webkitCompassHeading >= 0) {
+      raw = e.webkitCompassHeading; // already tilt-compensated, magnetic north
+      if (typeof e.webkitCompassAccuracy === "number" &&
+          (e.webkitCompassAccuracy < 0 || e.webkitCompassAccuracy > 50)) {
+        setStatus("🧲 Compass needs calibration — wave your phone in a figure-8");
+      }
+    } else if (usingAbsolute || e.absolute === true) {
+      if (e.alpha !== null && e.alpha !== undefined) {
+        raw = COMPASS_MATH.headingFromEuler(e.alpha, e.beta, e.gamma);
+      }
+    }
+    if (raw === null) return;
+    heading = smooth(COMPASS_MATH.applyScreenAngle(raw, screenAngle()));
+    sensorOk = true;
+    lastSensorTs = Date.now();
+    renderHeading();
+  }
+
+  function renderHeading() {
+    if (heading === null) return;
+    $("roseSpin").setAttribute("transform", `rotate(${-heading} 100 100)`);
+    $("headingReadout").textContent =
+      `${Math.round(heading)}° ${GEO.cardinal(heading)}`;
+  }
+
+  async function startCompass() {
+    // iOS 13+: must request permission inside a user gesture
+    if (typeof DeviceOrientationEvent !== "undefined" &&
+        typeof DeviceOrientationEvent.requestPermission === "function") {
+      try {
+        const resp = await DeviceOrientationEvent.requestPermission();
+        if (resp !== "granted") {
+          setStatus("⚠️ Compass permission denied — using demo mode.");
+          enableDemoMode();
+          return;
+        }
+      } catch {
+        setStatus("⚠️ Couldn't access the compass — using demo mode.");
+        enableDemoMode();
+        return;
+      }
+      window.addEventListener("deviceorientation", onOrientation, true);
+    } else if ("ondeviceorientationabsolute" in window) {
+      // Android Chrome: absolute orientation (true compass frame)
+      usingAbsolute = true;
+      window.addEventListener("deviceorientationabsolute", onOrientation, true);
+    } else if (typeof DeviceOrientationEvent !== "undefined") {
+      window.addEventListener("deviceorientation", onOrientation, true);
+    }
+    // If nothing arrives shortly, fall back to demo mode (desktop etc.)
+    setTimeout(() => { if (!sensorOk) enableDemoMode(); }, 2500);
+  }
+
+  function enableDemoMode() {
+    if (sensorOk) return;
+    $("demoControls").style.display = "flex";
+    const slider = $("demoSlider");
+    const apply = () => { heading = Number(slider.value); renderHeading(); };
+    slider.addEventListener("input", apply);
+    apply();
+  }
+
+  function setStatus(msg) { $("statusMsg").textContent = msg; }
+
+  // ---------- geolocation ----------
+  const FALLBACK_LOC = { lat: 32.08, lng: 34.78, fallback: true }; // Tel Aviv
+  let playerLoc = null;
+  function getLocation() {
+    return new Promise(resolve => {
+      if (!navigator.geolocation) return resolve(FALLBACK_LOC);
+      navigator.geolocation.getCurrentPosition(
+        p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, fallback: false }),
+        () => resolve(FALLBACK_LOC),
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+      );
+    });
+  }
+
+  // ---------- game ----------
+  const GAME_SECONDS = 30;
+  let timeLeft = GAME_SECONDS, timerId = null, result = null;
+
+  async function startGame() {
+    show("game");
+    setStatus("📍 Finding where on Earth you are…");
+    startCompass(); // must be in the same user-gesture call stack for iOS
+    playerLoc = await getLocation();
+    setStatus(playerLoc.fallback
+      ? "⚠️ No location — assuming you're in Israel. Point at the Mediterranean!"
+      : "Point the top of your phone at the Mediterranean Sea, then press the button!");
+    timeLeft = GAME_SECONDS;
+    $("timer").textContent = timeLeft;
+    $("timer").classList.remove("low");
+    timerId = setInterval(() => {
+      timeLeft--;
+      $("timer").textContent = Math.max(0, timeLeft);
+      if (timeLeft <= 10) $("timer").classList.add("low");
+      if (timeLeft <= 0) finish(null); // time's up
+    }, 1000);
+  }
+
+  function finish(pointedHeading) {
+    clearInterval(timerId);
+    const loc = playerLoc || FALLBACK_LOC;
+    const near = GEO.bearingToNearestSea(loc.lat, loc.lng);
+    let success = false, detail = "";
+    const timedOut = pointedHeading === null;
+    if (timedOut) {
+      detail = `⏰ Time's up! You never pressed the button. The sea was to the ${GEO.cardinal(near.bearing)} (${Math.round(near.bearing)}°), about ${Math.round(near.distanceKm)} km away.`;
+    } else {
+      success = GEO.pointsAtSea(loc.lat, loc.lng, pointedHeading);
+      const pc = GEO.cardinal(pointedHeading);
+      if (success) {
+        detail = `You pointed ${pc} (${Math.round(pointedHeading)}°) — straight at the Mediterranean! Nearest shore ≈ ${Math.round(near.distanceKm)} km away.`;
+      } else {
+        detail = `You pointed ${pc} (${Math.round(pointedHeading)}°)… that's not the sea 🏜️. It was to the ${GEO.cardinal(near.bearing)} (${Math.round(near.bearing)}°), about ${Math.round(near.distanceKm)} km away.`;
+      }
+    }
+    result = { success, detail, pointedHeading, timedOut,
+               timeUsed: GAME_SECONDS - Math.max(0, timeLeft) };
+    if (navigator.vibrate) navigator.vibrate(success ? [80, 60, 80] : 300);
+    $("resultEmoji").textContent = success ? "🌊🎉" : "🏜️😅";
+    $("resultTitle").textContent = success ? "You found the sea!" : "Lost on dry land!";
+    $("resultDetail").textContent = detail;
+    drawResultCard();
+    show("result");
+  }
+
+  $("btnReady").addEventListener("click", () => {
+    if (heading === null) { setStatus("⏳ Compass not ready yet — hold your phone flat."); return; }
+    // Stale sensor guard (real sensors only): no data for >3s means we
+    // can't trust the heading.
+    if (sensorOk && Date.now() - lastSensorTs > 3000) {
+      setStatus("⚠️ Compass stopped responding — move your phone a little.");
+      return;
+    }
+    finish(heading);
+  });
+
+  // ---------- result card (canvas screenshot) ----------
+  function drawResultCard() {
+    const c = $("resultCanvas"), ctx = c.getContext("2d");
+    const W = c.width, H = c.height;
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, "#03263b"); grad.addColorStop(1, "#0a6e93");
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "center"; ctx.fillStyle = "#eaf6fb";
+    ctx.font = "bold 52px sans-serif";
+    ctx.fillText("Where is the Sea? 🌊", W / 2, 110);
+    ctx.font = "120px sans-serif";
+    ctx.fillText(result.success ? "🌊🎉" : "🏜️😅", W / 2, 300);
+    ctx.font = "bold 60px sans-serif";
+    ctx.fillStyle = result.success ? "#7CFC9A" : "#ff8a80";
+    ctx.fillText(result.success ? "FOUND THE SEA!" : "LOST ON LAND!", W / 2, 420);
+    ctx.fillStyle = "#eaf6fb"; ctx.font = "34px sans-serif";
+    wrapText(ctx, result.detail, W / 2, 510, W - 120, 48);
+    if (!result.timedOut) {
+      ctx.font = "30px sans-serif"; ctx.fillStyle = "#ffd966";
+      ctx.fillText(`Answered in ${result.timeUsed}s of 30s`, W / 2, 760);
+    }
+    if (challenger) {
+      ctx.font = "30px sans-serif"; ctx.fillStyle = "#ffd966";
+      ctx.fillText(`Challenged by ${challenger}`, W / 2, 810);
+    }
+    ctx.font = "26px sans-serif"; ctx.fillStyle = "rgba(234,246,251,.6)";
+    ctx.fillText("Think you can do better? Take the challenge!", W / 2, 860);
+  }
+
+  function wrapText(ctx, text, x, y, maxW, lineH) {
+    const words = text.split(" ");
+    let line = "";
+    for (const w of words) {
+      const test = line ? line + " " + w : w;
+      if (ctx.measureText(test).width > maxW && line) {
+        ctx.fillText(line, x, y); y += lineH; line = w;
+      } else line = test;
+    }
+    if (line) ctx.fillText(line, x, y);
+  }
+
+  function shareText() {
+    const verdict = result.success ? "I found the Mediterranean! 🌊🎉" : "I totally missed the sea 🏜️😅";
+    const back = challenger ? ` ${challenger}, your move…` : "";
+    return `Where is the Sea? — ${verdict}${back}\nTry it yourself: ${pageUrl()}`;
+  }
+
+  $("btnShare").addEventListener("click", async () => {
+    const canvas = $("resultCanvas");
+    try {
+      const blob = await new Promise(r => canvas.toBlob(r, "image/png"));
+      const file = new File([blob], "where-is-the-sea.png", { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], text: shareText() });
+        return;
+      }
+    } catch (err) {
+      if (err && err.name === "AbortError") return; // user closed share sheet
+    }
+    // Fallback: plain WhatsApp text share
+    location.href = "https://wa.me/?text=" + encodeURIComponent(shareText());
+  });
+
+  // ---------- challenge creation ----------
+  function challengeLink(name) {
+    return pageUrl() + (name ? "?by=" + encodeURIComponent(name) : "");
+  }
+  $("btnChallenge").addEventListener("click", () => show("create"));
+  $("btnBackIntro").addEventListener("click", () => show("intro"));
+  $("btnSendChallenge").addEventListener("click", () => {
+    const name = $("nameInput").value.trim();
+    const msg = `🌊 I challenge you: find the Mediterranean Sea in 30 seconds! 🧭\n${challengeLink(name)}`;
+    location.href = "https://wa.me/?text=" + encodeURIComponent(msg);
+  });
+  $("btnChallengeBack").addEventListener("click", () => {
+    $("nameInput").value = "";
+    show("create");
+  });
+
+  $("btnStart").addEventListener("click", startGame);
+  $("btnRetry").addEventListener("click", () => {
+    heading = null; sensorOk && renderHeading();
+    startGame();
+  });
+})();
+</script>
+</body>
+</html>
