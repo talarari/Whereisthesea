@@ -122,6 +122,29 @@ console.log("— bearingToNearestSea sanity —");
         c.bearing < 45 || c.bearing > 315);
 }
 
+console.log("— strict pass/fail: no success when meaningfully off target —");
+{
+  // find headings that miss every sea direction by 12-19 degrees — under
+  // the old ±20° tolerance these were "successes"; they must fail now
+  let tested = 0;
+  for (let h = 0; h < 360; h += 1) {
+    const off = GEO.degreesOffSea(31.78, 35.22, h); // Jerusalem
+    if (off >= 12 && off <= 19) {
+      tested++;
+      check(`Jerusalem heading ${h}° (${off}° off) → fail`, !GEO.pointsAtSea(31.78, 35.22, h));
+      if (tested >= 2) break;
+    }
+  }
+  check("found borderline headings to test", tested >= 1);
+  check("small sensor slack still passes (8° off)", (() => {
+    for (let h = 0; h < 360; h += 1) {
+      const off = GEO.degreesOffSea(31.78, 35.22, h);
+      if (off > 0 && off <= 8) return GEO.pointsAtSea(31.78, 35.22, h);
+    }
+    return true; // no such heading exists at this location — vacuously fine
+  })());
+}
+
 console.log("— degreesOffSea (the 'you were N° off' reveal) —");
 {
   const off = GEO.degreesOffSea;

@@ -417,7 +417,7 @@ const GEO = (() => {
     return false;
   }
 
-  const TOLERANCE_DEG = 20; // forgiveness either side of where they point
+  const TOLERANCE_DEG = 10; // only enough slack to absorb compass sensor noise
 
   // Game verdict: success if any ray within ±TOLERANCE of the pointed
   // heading reaches the sea.
@@ -1332,7 +1332,7 @@ const SCENE3D = (() => {
       SCENE3D.showGlobe({ lat: loc.lat, lng: loc.lng, heading: pointedHeading,
                           seaBearing: near.bearing, seaKm: near.distanceKm });
       const msg = timedOut ? "⏰ Out of time — here's where the sea was:"
-        : success ? (offDeg === 0 ? "🎯 Dead on the Mediterranean!" : "🌊 Close enough — that's the sea!")
+        : success ? "🎯 That's the Mediterranean!"
         : `📐 You were ${offDeg}° off. Green shows the way.`;
       $("globeMsg").textContent = msg;
       $("globeMsg").style.display = "block";
