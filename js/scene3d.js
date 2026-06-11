@@ -279,25 +279,51 @@ const SCENE3D = (() => {
     const faceCanvas = document.createElement("canvas");
     faceCanvas.width = 256; faceCanvas.height = 128;
     {
+      // South Park-style head: skin tone all around, hair cap over the
+      // crown and back, and the whole photo compressed onto the visible
+      // front hemisphere, feathered into the skin so nothing crops.
       const fx = faceCanvas.getContext("2d");
-      fx.fillStyle = "#2a1d13"; fx.fillRect(0, 0, 256, 128); // hair / back
+      const SKIN = "#c08e66", HAIR = "#2a1d13";
+      fx.fillStyle = SKIN; fx.fillRect(0, 0, 256, 128);
+      fx.fillStyle = HAIR;
+      fx.fillRect(0, 0, 256, 22);                 // crown
+      fx.fillRect(0, 0, 60, 60); fx.fillRect(196, 0, 60, 60); // back of head
+      const soft = (x0, x1, y0, y1, vertical) => {
+        const g = vertical ? fx.createLinearGradient(0, y0, 0, y1)
+                           : fx.createLinearGradient(x0, 0, x1, 0);
+        g.addColorStop(0, "rgba(42,29,19,1)"); g.addColorStop(1, "rgba(42,29,19,0)");
+        fx.fillStyle = g;
+        fx.fillRect(Math.min(x0, x1), Math.min(y0, y1),
+                    Math.abs(x1 - x0) || (vertical ? 256 : 0) || 256,
+                    Math.abs(y1 - y0) || 128);
+      };
+      // feathered hair edges
+      let g = fx.createLinearGradient(0, 22, 0, 34);
+      g.addColorStop(0, "rgba(42,29,19,1)"); g.addColorStop(1, "rgba(42,29,19,0)");
+      fx.fillStyle = g; fx.fillRect(0, 22, 256, 12);
+      g = fx.createLinearGradient(60, 0, 78, 0);
+      g.addColorStop(0, "rgba(42,29,19,1)"); g.addColorStop(1, "rgba(42,29,19,0)");
+      fx.fillStyle = g; fx.fillRect(60, 0, 18, 60);
+      g = fx.createLinearGradient(196, 0, 178, 0);
+      g.addColorStop(0, "rgba(42,29,19,1)"); g.addColorStop(1, "rgba(42,29,19,0)");
+      fx.fillStyle = g; fx.fillRect(178, 0, 18, 60);
       const im = new Image();
       im.onload = () => {
-        // Wrap the photo around nearly the whole head (full height, ~260
-        // degrees of longitude) so no background margins are visible from
-        // any normal angle; feather the far edges into the hair tone where
-        // the wrap ends behind the ears.
-        fx.drawImage(im, 36, -3, 184, 134);
-        const hairA = a => `rgba(32,21,14,${a})`;
-        const gl = fx.createLinearGradient(36, 0, 80, 0);
-        gl.addColorStop(0, hairA(1)); gl.addColorStop(1, hairA(0));
-        fx.fillStyle = gl; fx.fillRect(36, 0, 44, 128);
-        const gr = fx.createLinearGradient(220, 0, 176, 0);
-        gr.addColorStop(0, hairA(1)); gr.addColorStop(1, hairA(0));
-        fx.fillStyle = gr; fx.fillRect(176, 0, 44, 128);
-        const gt = fx.createLinearGradient(0, 0, 0, 22); // hair over the crown
-        gt.addColorStop(0, hairA(1)); gt.addColorStop(1, hairA(0));
-        fx.fillStyle = gt; fx.fillRect(36, 0, 184, 22);
+        // whole face in the front ~135 degrees, oval-feathered into skin
+        const t = document.createElement("canvas");
+        t.width = 96; t.height = 104;
+        const tx = t.getContext("2d");
+        tx.drawImage(im, 0, 0, 96, 104);
+        tx.globalCompositeOperation = "destination-in";
+        tx.save();
+        tx.translate(48, 52); tx.scale(1, 104 / 96);
+        const m = tx.createRadialGradient(0, 0, 24, 0, 0, 44);
+        m.addColorStop(0, "rgba(0,0,0,1)");
+        m.addColorStop(.72, "rgba(0,0,0,1)");
+        m.addColorStop(1, "rgba(0,0,0,0)");
+        tx.fillStyle = m; tx.fillRect(-48, -52, 96, 104);
+        tx.restore();
+        fx.drawImage(t, 80, 12);
         faceTex.needsUpdate = true;
       };
       im.src = FACE_SRC;
