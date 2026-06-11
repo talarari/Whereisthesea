@@ -281,28 +281,23 @@ const SCENE3D = (() => {
     {
       const fx = faceCanvas.getContext("2d");
       fx.fillStyle = "#2a1d13"; fx.fillRect(0, 0, 256, 128); // hair / back
-      fx.fillStyle = "#20150e"; fx.fillRect(0, 0, 256, 34);  // darker crown
       const im = new Image();
       im.onload = () => {
-        // Keep the photo inside the sphere's low-distortion equator band
-        // and feather it into the hair tone with an oval mask, so it reads
-        // as a face on a head instead of a pole-to-pole smear.
-        const t = document.createElement("canvas");
-        t.width = 72; t.height = 80;
-        const tx = t.getContext("2d");
-        tx.drawImage(im, 0, 0, 72, 80);
-        tx.globalCompositeOperation = "destination-in";
-        tx.save();
-        tx.translate(36, 40);
-        tx.scale(1, 80 / 72);
-        const g = tx.createRadialGradient(0, 0, 16, 0, 0, 35);
-        g.addColorStop(0, "rgba(0,0,0,1)");
-        g.addColorStop(.72, "rgba(0,0,0,1)");
-        g.addColorStop(1, "rgba(0,0,0,0)");
-        tx.fillStyle = g;
-        tx.fillRect(-36, -40, 72, 80);
-        tx.restore();
-        fx.drawImage(t, 92, 26); // centered on u=.5, eyes near the equator
+        // Wrap the photo around nearly the whole head (full height, ~260
+        // degrees of longitude) so no background margins are visible from
+        // any normal angle; feather the far edges into the hair tone where
+        // the wrap ends behind the ears.
+        fx.drawImage(im, 36, -3, 184, 134);
+        const hairA = a => `rgba(32,21,14,${a})`;
+        const gl = fx.createLinearGradient(36, 0, 80, 0);
+        gl.addColorStop(0, hairA(1)); gl.addColorStop(1, hairA(0));
+        fx.fillStyle = gl; fx.fillRect(36, 0, 44, 128);
+        const gr = fx.createLinearGradient(220, 0, 176, 0);
+        gr.addColorStop(0, hairA(1)); gr.addColorStop(1, hairA(0));
+        fx.fillStyle = gr; fx.fillRect(176, 0, 44, 128);
+        const gt = fx.createLinearGradient(0, 0, 0, 22); // hair over the crown
+        gt.addColorStop(0, hairA(1)); gt.addColorStop(1, hairA(0));
+        fx.fillStyle = gt; fx.fillRect(36, 0, 184, 22);
         faceTex.needsUpdate = true;
       };
       im.src = FACE_SRC;
@@ -310,7 +305,7 @@ const SCENE3D = (() => {
     const faceTex = new THREE.CanvasTexture(faceCanvas);
     kHead = new THREE.Mesh(new THREE.SphereGeometry(.36, 28, 20),
       new THREE.MeshStandardMaterial({ map: faceTex, roughness: .75 }));
-    kHead.scale.set(.96, 1.05, .96);
+    kHead.scale.set(.82, 1.14, .88); // ellipsoid head
     kHead.position.y = 1.62;
     kPaddle = new THREE.Group();
     const kShaft = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 2.7, 8),
@@ -502,7 +497,7 @@ const SCENE3D = (() => {
       kayaker.rotation.z = Math.sin(t * 1.1) * .04;   // pitch over the swell
       kPaddle.rotation.x = Math.sin(t * 2.4) * .55;   // alternate blade dips
       // keep his glance on the player whichever way he's heading
-      kHead.rotation.y = -1.5 - kayaker.userData.yaw; // face holds on the player through turns
+      kHead.rotation.y = -1.62 - kayaker.userData.yaw; // face holds on the player through turns
     }
 
     const cam = { cx: 0, cy: 3.1, cz: 8.5, lx: 0, ly: 1.5, lz: -40 };
