@@ -187,26 +187,42 @@ const GEO = (() => {
     return false;
   }
 
-  const TOLERANCE_DEG = 10; // only enough slack to absorb compass sensor noise
+  const TOLERANCE_DEG = 25; // allowed error vs the nearest-coast bearing
 
-  // Game verdict: success if any ray within ±TOLERANCE of the pointed
-  // heading reaches the sea.
-  function pointsAtSea(lat, lng, heading) {
-    for (let off = -TOLERANCE_DEG; off <= TOLERANCE_DEG; off += 5) {
-      if (rayHitsSea(lat, lng, (heading + off + 360) % 360)) return true;
-    }
-    return false;
+  function angDist(a, b) {
+    const d = Math.abs(((a - b) % 360 + 360) % 360);
+    return d > 180 ? 360 - d : d;
   }
 
-  // Bearing to the closest Mediterranean coast vertex — used only for the
-  // result message ("the sea was that way"), not for the verdict.
+  // Game verdict: the player must point at the NEAREST stretch of coast.
+  // A ray that merely grazes the sea far away (e.g. pointing up the
+  // Israeli coastline toward Cyprus) does not count — from Israel this
+  // means success requires pointing essentially west.
+  function pointsAtSea(lat, lng, heading) {
+    if (inMediterranean(lat, lng)) return true; // standing in/on the sea
+    return angDist(heading, bearingToNearestSea(lat, lng).bearing) <= TOLERANCE_DEG;
+  }
+
+  // Bearing and distance to the closest point on the Mediterranean
+  // coastline (nearest point on polygon edges, local planar approximation
+  // with longitude scaled by cos(lat)). This is the true "the sea is that
+  // way" direction, accurate even right next to the beach.
   function bearingToNearestSea(lat, lng) {
-    let best = Infinity, bestB = 0, bestD = 0;
-    for (const [la, lo] of MED) {
-      const d = haversineKm(lat, lng, la, lo);
-      if (d < best) { best = d; bestB = bearingTo(lat, lng, la, lo); bestD = d; }
+    const cos0 = Math.cos(rad(lat)) || 1e-9;
+    let bestD2 = Infinity, bLat = 0, bLng = 0;
+    for (let i = 0, j = MED.length - 1; i < MED.length; j = i++) {
+      const ax = (MED[j][1] - lng) * cos0, ay = MED[j][0] - lat;
+      const bx = (MED[i][1] - lng) * cos0, by = MED[i][0] - lat;
+      const dx = bx - ax, dy = by - ay;
+      const L2 = dx * dx + dy * dy;
+      let t = L2 ? -(ax * dx + ay * dy) / L2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const qx = ax + dx * t, qy = ay + dy * t;
+      const d2 = qx * qx + qy * qy;
+      if (d2 < bestD2) { bestD2 = d2; bLat = lat + qy; bLng = lng + qx / cos0; }
     }
-    return { bearing: bestB, distanceKm: bestD };
+    return { bearing: bearingTo(lat, lng, bLat, bLng),
+             distanceKm: haversineKm(lat, lng, bLat, bLng) };
   }
 
   function cardinal(b) {
@@ -215,20 +231,11 @@ const GEO = (() => {
   }
 
 
-  // Angular distance (degrees) from `heading` to the nearest direction
-  // that reaches the Mediterranean — 0 when pointing at the sea. Used for
-  // the "you were N degrees off" reveal; the verdict stays pointsAtSea.
+  // Angular error (degrees) vs the nearest-coast bearing — 0 when
+  // standing in the sea. Matches the strict verdict.
   function degreesOffSea(lat, lng, heading) {
-    const angDist = (a, b) => {
-      const d = Math.abs(((a - b) % 360 + 360) % 360);
-      return d > 180 ? 360 - d : d;
-    };
-    if (rayHitsSea(lat, lng, heading)) return 0; // exact aim beats ray sampling
-    let best = Infinity;
-    for (let h = 0; h < 360; h += 2) {
-      if (rayHitsSea(lat, lng, h)) best = Math.min(best, angDist(heading, h));
-    }
-    return best === Infinity ? 180 : Math.round(best);
+    if (inMediterranean(lat, lng)) return 0;
+    return Math.round(angDist(heading, bearingToNearestSea(lat, lng).bearing));
   }
 
   return { MED, inMediterranean, destination, bearingTo, haversineKm,

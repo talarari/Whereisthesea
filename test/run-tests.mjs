@@ -91,12 +91,15 @@ for (const [name, la, lo, h, exp] of cases) {
   check(name, GEO.rayHitsSea(la, lo, h) === exp);
 }
 
-console.log("— verdicts: pointsAtSea (game rule, ±tolerance) —");
-check("Tel Aviv 270° → success", GEO.pointsAtSea(32.08, 34.80, 270) === true);
+console.log("— verdicts: pointsAtSea (strict: must point at the NEAREST coast) —");
+check("Tel Aviv 270° (W) → success", GEO.pointsAtSea(32.08, 34.80, 270) === true);
+check("Tel Aviv 315° (NW, grazes the sea far away) → FAIL", GEO.pointsAtSea(32.08, 34.80, 315) === false);
+check("Tel Aviv 225° (SW, also grazes sea) → FAIL", GEO.pointsAtSea(32.08, 34.80, 225) === false);
 check("Tel Aviv 90° → fail", GEO.pointsAtSea(32.08, 34.80, 90) === false);
-check("Jerusalem 250° (W-ish, within tolerance) → success", GEO.pointsAtSea(31.78, 35.22, 250) === true);
+check("Haifa 315° (NW along the coast) → FAIL", GEO.pointsAtSea(32.79, 34.99, 315) === false);
+check("Jerusalem 270° (W) → success", GEO.pointsAtSea(31.78, 35.22, 270) === true);
 check("Jerusalem 135° (SE) → fail", GEO.pointsAtSea(31.78, 35.22, 135) === false);
-check("Beer Sheva 315° (NW) → success", GEO.pointsAtSea(31.25, 34.79, 315) === true);
+check("Beer Sheva 315° (NW, its nearest coast) → success", GEO.pointsAtSea(31.25, 34.79, 315) === true);
 check("Beer Sheva 90° (E) → fail", GEO.pointsAtSea(31.25, 34.79, 90) === false);
 
 console.log("— bearingToNearestSea sanity —");
@@ -111,35 +114,23 @@ console.log("— bearingToNearestSea sanity —");
         c.bearing < 45 || c.bearing > 315);
 }
 
-console.log("— strict pass/fail: no success when meaningfully off target —");
+console.log("— strict tolerance boundary (±25° of the nearest-coast bearing) —");
 {
-  // find headings that miss every sea direction by 12-19 degrees — under
-  // the old ±20° tolerance these were "successes"; they must fail now
-  let tested = 0;
-  for (let h = 0; h < 360; h += 1) {
-    const off = GEO.degreesOffSea(31.78, 35.22, h); // Jerusalem
-    if (off >= 12 && off <= 19) {
-      tested++;
-      check(`Jerusalem heading ${h}° (${off}° off) → fail`, !GEO.pointsAtSea(31.78, 35.22, h));
-      if (tested >= 2) break;
-    }
-  }
-  check("found borderline headings to test", tested >= 1);
-  check("small sensor slack still passes (8° off)", (() => {
-    for (let h = 0; h < 360; h += 1) {
-      const off = GEO.degreesOffSea(31.78, 35.22, h);
-      if (off > 0 && off <= 8) return GEO.pointsAtSea(31.78, 35.22, h);
-    }
-    return true; // no such heading exists at this location — vacuously fine
-  })());
+  const nb = GEO.bearingToNearestSea(32.08, 34.80).bearing; // Tel Aviv
+  const at = off => GEO.pointsAtSea(32.08, 34.80, (nb + off + 360) % 360);
+  check(`nearest-coast bearing is westish (got ${nb.toFixed(0)}°)`, nb > 260 && nb < 300);
+  check("dead-on the coast bearing → success", at(0));
+  check("20° off → success (sensor slack)", at(20) && at(-20));
+  check("30° off → FAIL", !at(30) && !at(-30));
+  check("60° off → FAIL", !at(60) && !at(-60));
 }
 
-console.log("— degreesOffSea (the 'you were N° off' reveal) —");
+console.log("— degreesOffSea (error vs the nearest-coast bearing) —");
 {
   const off = GEO.degreesOffSea;
-  check(`Tel Aviv pointing W → 0° off (got ${off(32.08, 34.80, 270)})`, off(32.08, 34.80, 270) === 0);
-  check(`Tel Aviv pointing E → way off (got ${off(32.08, 34.80, 90)})`, off(32.08, 34.80, 90) >= 55);
-  check(`Jerusalem pointing 250 → small (got ${off(31.78, 35.22, 250)})`, off(31.78, 35.22, 250) <= 25);
+  check(`Tel Aviv pointing W → small (got ${off(32.08, 34.80, 270)})`, off(32.08, 34.80, 270) <= 20);
+  check(`Tel Aviv pointing E → way off (got ${off(32.08, 34.80, 90)})`, off(32.08, 34.80, 90) >= 120);
+  check(`Tel Aviv pointing NW → meaningfully off (got ${off(32.08, 34.80, 315)})`, off(32.08, 34.80, 315) >= 26);
   check(`on a boat → 0° off any direction (got ${off(33.5, 33.0, 123)})`, off(33.5, 33.0, 123) === 0);
   const a = off(31.78, 35.22, 290), b = off(31.78, 35.22, 200), c = off(31.78, 35.22, 110);
   check(`monotonic as you turn away from the sea (${a} <= ${b} <= ${c})`, a <= b && b <= c);

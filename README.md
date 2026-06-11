@@ -23,9 +23,12 @@ Play → send the result screenshot back → challenge them back.
   launch cinematic when you commit, and a stamped pass/fail verdict.
   Synthesized WebAudio sound — no audio assets.
 - It reads your location (with a fallback) and your phone's compass, then
-  checks whether a great-circle ray in the direction you pointed actually
-  reaches the Mediterranean, using a ~120-vertex polygon of the sea
-  (Adriatic and Aegean included, Black Sea and Atlantic excluded).
+  checks that you pointed within ±25° of the bearing to the **nearest point
+  on the Mediterranean coastline** (nearest point on the edges of a
+  ~120-vertex polygon of the sea). Strict on purpose: from Israel, where
+  the coast runs the whole length of the country, directions that merely
+  graze the sea far away (NW toward Cyprus, SW toward Egypt) don't count —
+  you must point at your nearest beach, essentially west.
 - Compass handling is platform-correct:
   - **iOS**: `DeviceOrientationEvent.requestPermission()` inside the tap
     gesture, then `webkitCompassHeading` (never `alpha`, which is unreliable
