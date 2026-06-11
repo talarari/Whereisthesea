@@ -281,10 +281,28 @@ const SCENE3D = (() => {
     {
       const fx = faceCanvas.getContext("2d");
       fx.fillStyle = "#2a1d13"; fx.fillRect(0, 0, 256, 128); // hair / back
+      fx.fillStyle = "#20150e"; fx.fillRect(0, 0, 256, 34);  // darker crown
       const im = new Image();
       im.onload = () => {
-        // front of the sphere is u=.5 → canvas center; ~110° of longitude
-        fx.drawImage(im, 89, 8, 78, 112);
+        // Keep the photo inside the sphere's low-distortion equator band
+        // and feather it into the hair tone with an oval mask, so it reads
+        // as a face on a head instead of a pole-to-pole smear.
+        const t = document.createElement("canvas");
+        t.width = 72; t.height = 80;
+        const tx = t.getContext("2d");
+        tx.drawImage(im, 0, 0, 72, 80);
+        tx.globalCompositeOperation = "destination-in";
+        tx.save();
+        tx.translate(36, 40);
+        tx.scale(1, 80 / 72);
+        const g = tx.createRadialGradient(0, 0, 16, 0, 0, 35);
+        g.addColorStop(0, "rgba(0,0,0,1)");
+        g.addColorStop(.72, "rgba(0,0,0,1)");
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        tx.fillStyle = g;
+        tx.fillRect(-36, -40, 72, 80);
+        tx.restore();
+        fx.drawImage(t, 92, 26); // centered on u=.5, eyes near the equator
         faceTex.needsUpdate = true;
       };
       im.src = FACE_SRC;
@@ -292,14 +310,14 @@ const SCENE3D = (() => {
     const faceTex = new THREE.CanvasTexture(faceCanvas);
     kHead = new THREE.Mesh(new THREE.SphereGeometry(.36, 28, 20),
       new THREE.MeshStandardMaterial({ map: faceTex, roughness: .75 }));
-    kHead.scale.set(.92, 1.08, .95);
+    kHead.scale.set(.96, 1.05, .96);
     kHead.position.y = 1.62;
     kPaddle = new THREE.Group();
     const kShaft = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 2.7, 8),
       new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: .6 }));
     kShaft.rotation.x = Math.PI / 2; // across the kayak (z), blades over each side
-    const kBladeGeo = new THREE.BoxGeometry(.06, .68, .4);
-    const kBladeMat = new THREE.MeshStandardMaterial({ color: 0xf2d54f, roughness: .5 });
+    const kBladeGeo = new THREE.BoxGeometry(.06, .56, .32);
+    const kBladeMat = new THREE.MeshStandardMaterial({ color: 0xd9952f, roughness: .55 });
     const kb1 = new THREE.Mesh(kBladeGeo, kBladeMat); kb1.position.z = 1.45;
     const kb2 = new THREE.Mesh(kBladeGeo, kBladeMat); kb2.position.z = -1.45;
     kPaddle.add(kShaft, kb1, kb2);
