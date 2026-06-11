@@ -10,10 +10,17 @@ const { chromium } = await import(
   process.env.PLAYWRIGHT_PATH || "/opt/node22/lib/node_modules/playwright/index.mjs");
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const html = readFileSync(join(root, "index.html"));
+const MIME = { html: "text/html", js: "text/javascript", css: "text/css",
+               jpg: "image/jpeg", png: "image/png" };
 const server = createServer((req, res) => {
-  res.writeHead(200, { "content-type": "text/html" });
-  res.end(html);
+  const path = req.url.split("?")[0].replace(/^\/+/, "") || "index.html";
+  try {
+    const body = readFileSync(join(root, path));
+    res.writeHead(200, { "content-type": MIME[path.split(".").pop()] || "application/octet-stream" });
+    res.end(body);
+  } catch {
+    res.writeHead(404); res.end("not found");
+  }
 });
 await new Promise(r => server.listen(0, r));
 const url = `http://127.0.0.1:${server.address().port}/`;

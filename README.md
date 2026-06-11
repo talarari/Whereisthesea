@@ -8,8 +8,15 @@ Play → send the result screenshot back → challenge them back.
 
 ## How it works
 
-- The game is a **single self-contained `index.html`** — no build, no CDN,
-  no server logic. Three.js is embedded inside the file.
+- Plain static site, **no build step, no CDN, no server logic** — deploys
+  straight to GitHub Pages:
+  - `index.html` + `css/style.css` — markup and HUD styling
+  - `js/geo.js` — Mediterranean polygon, great-circle math, verdict logic
+  - `js/compass.js` — tilt-compensated heading math
+  - `js/scene3d.js` — the Three.js ocean scene
+  - `js/sound.js` — synthesized WebAudio
+  - `js/app.js` — game flow and sharing
+  - `vendor/three.min.js` (r149), `assets/face.jpg`
 - **Full 3D presentation**: shader-animated ocean with sailboats, seagulls,
   clouds and a bobbing buoy, time-of-day palettes (day/sunset/night —
   preview with `?tod=night`), a storm that builds as the timer runs out, a
@@ -45,8 +52,7 @@ a link like `...?by=YourName`, so the opening screen shows who dared them.
 
 ## Tests
 
-The geo/compass logic lives in marked `<script>` blocks inside `index.html`
-and is verified by extracting and executing them:
+The geo/compass logic in `js/` is loaded directly by the test harness:
 
 ```bash
 node test/run-tests.mjs    # 100+ geography & compass-math assertions

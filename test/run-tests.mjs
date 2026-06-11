@@ -1,25 +1,14 @@
-// Verification harness for index.html game logic.
-// Extracts the pure-logic <script> blocks from the HTML and runs
-// assertions against known geographic facts and compass math identities.
-import { readFileSync } from "node:fs";
+// Verification harness for the game logic.
+// js/geo.js and js/compass.js are classic scripts with a CommonJS export
+// shim, so they can be loaded directly.
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const html = readFileSync(join(root, "index.html"), "utf8");
-
-function extractScript(id) {
-  const m = html.match(new RegExp(`<script id="${id}">([\\s\\S]*?)</script>`));
-  if (!m) throw new Error(`script block ${id} not found`);
-  return m[1];
-}
-
-const sandbox = { module: { exports: {} } };
-new Function("module", extractScript("geo-logic"))(sandbox.module);
-const GEO = sandbox.module.exports;
-const sandbox2 = { module: { exports: {} } };
-new Function("module", extractScript("compass-logic"))(sandbox2.module);
-const { COMPASS_MATH } = sandbox2.module.exports;
+const require = createRequire(import.meta.url);
+const GEO = require(join(root, "js/geo.js"));
+const { COMPASS_MATH } = require(join(root, "js/compass.js"));
 
 let pass = 0, fail = 0;
 function check(name, cond, extra = "") {
