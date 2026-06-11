@@ -276,27 +276,28 @@ const SCENE3D = (() => {
     };
     // round head: the face is painted onto the front of an equirect canvas
     // (hair tone everywhere else), so it wraps a sphere naturally
-    // South Park-style 3D head: an ellipsoid with the whole face on the
-    // visible front, blended into skin/hair tones sampled from the photo
-    // itself so the seams are invisible.
+    // The face is applied by projective texture mapping, baked once into
+    // an equirect texture: every front-hemisphere texel is projected
+    // orthographically onto the photo plane and sampled bilinearly, so the
+    // photo reads flat and undistorted from the player's side (no
+    // fish-eye), while skin/hair tones sampled from the photo itself cover
+    // the rest of the head.
     const faceCanvas = document.createElement("canvas");
-    faceCanvas.width = 256; faceCanvas.height = 128;
+    faceCanvas.width = 1024; faceCanvas.height = 512;
     const faceTex = new THREE.CanvasTexture(faceCanvas);
+    faceTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
     {
       const fx = faceCanvas.getContext("2d");
-      fx.fillStyle = "#c08e66"; fx.fillRect(0, 0, 256, 128); // until photo loads
+      fx.fillStyle = "#c08e66"; fx.fillRect(0, 0, 1024, 512); // until photo loads
       const im = new Image();
       im.onload = () => {
-        // sample real skin and hair tones from the photo
+        // --- sample real skin and hair tones from the photo ---
         const probe = document.createElement("canvas");
         probe.width = im.naturalWidth; probe.height = im.naturalHeight;
         const px = probe.getContext("2d");
         px.drawImage(im, 0, 0);
-        const grab = (u, v) => {
-          const d = px.getImageData(Math.round(u * probe.width),
-                                    Math.round(v * probe.height), 1, 1).data;
-          return [d[0], d[1], d[2]];
-        };
+        const grab = (u, v) => px.getImageData(Math.round(u * probe.width),
+                                               Math.round(v * probe.height), 1, 1).data;
         const avg = pts => {
           const c = pts.map(p => grab(p[0], p[1]))
             .reduce((a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], [0, 0, 0]);
@@ -306,67 +307,83 @@ const SCENE3D = (() => {
         const hair = avg([[.42, .07], [.58, .07], [.50, .04]]); // top of head
         const css = c => `rgb(${c[0]},${c[1]},${c[2]})`;
         const cssA = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-        // base skin everywhere
-        fx.fillStyle = css(skin); fx.fillRect(0, 0, 256, 128);
-        // hair: crown band + back of the head, feathered
+
+        // --- base skin + feathered hair cap (crown and back of head) ---
+        fx.fillStyle = css(skin); fx.fillRect(0, 0, 1024, 512);
         fx.fillStyle = css(hair);
-        fx.fillRect(0, 0, 256, 20);
-        fx.fillRect(0, 0, 58, 58); fx.fillRect(198, 0, 58, 58);
-        let g = fx.createLinearGradient(0, 20, 0, 36);
+        fx.fillRect(0, 0, 1024, 80);
+        fx.fillRect(0, 0, 232, 232); fx.fillRect(792, 0, 232, 232);
+        let g = fx.createLinearGradient(0, 80, 0, 144);
         g.addColorStop(0, cssA(hair, 1)); g.addColorStop(1, cssA(hair, 0));
-        fx.fillStyle = g; fx.fillRect(0, 20, 256, 16);
-        g = fx.createLinearGradient(58, 0, 80, 0);
+        fx.fillStyle = g; fx.fillRect(0, 80, 1024, 64);
+        g = fx.createLinearGradient(232, 0, 320, 0);
         g.addColorStop(0, cssA(hair, 1)); g.addColorStop(1, cssA(hair, 0));
-        fx.fillStyle = g; fx.fillRect(58, 0, 22, 58);
-        g = fx.createLinearGradient(198, 0, 176, 0);
+        fx.fillStyle = g; fx.fillRect(232, 0, 88, 232);
+        g = fx.createLinearGradient(792, 0, 704, 0);
         g.addColorStop(0, cssA(hair, 1)); g.addColorStop(1, cssA(hair, 0));
-        fx.fillStyle = g; fx.fillRect(176, 0, 22, 58);
-        // the whole face across the front, oval-feathered
-        const t = document.createElement("canvas");
-        t.width = 104; t.height = 112;
-        const tx = t.getContext("2d");
-        tx.drawImage(im, 10, 2, 108, 142, 0, 0, 104, 112); // trim photo edges (curtain)
-        tx.globalCompositeOperation = "destination-in";
-        tx.save();
-        tx.translate(52, 56); tx.scale(1, 112 / 104);
-        const m = tx.createRadialGradient(0, 0, 27, 0, 0, 49);
+        fx.fillStyle = g; fx.fillRect(704, 0, 88, 232);
+
+        // --- oval-masked, edge-trimmed photo as the projection source ---
+        const ph = document.createElement("canvas");
+        ph.width = 512; ph.height = 544;
+        const phx = ph.getContext("2d");
+        phx.drawImage(im, 10, 2, 108, 142, 0, 0, 512, 544); // trim curtain edges
+        phx.globalCompositeOperation = "destination-in";
+        phx.save();
+        phx.translate(256, 272); phx.scale(1, 544 / 512);
+        const m = phx.createRadialGradient(0, 0, 130, 0, 0, 244);
         m.addColorStop(0, "rgba(0,0,0,1)");
         m.addColorStop(.74, "rgba(0,0,0,1)");
         m.addColorStop(1, "rgba(0,0,0,0)");
-        tx.fillStyle = m; tx.fillRect(-52, -56, 104, 112);
-        tx.restore();
-        // Pre-warp with the inverse spherical (arcsin) mapping so the face
-        // appears flat from the front instead of fish-eyed: texture pixels
-        // are packed toward the silhouette and relaxed at the center,
-        // cancelling the sphere's bulge.
-        const phiMax = (104 / 256) * Math.PI;        // half horizontal span
-        const thMax = (112 / 128) * (Math.PI / 2);   // half vertical span
-        const wa = document.createElement("canvas");
-        wa.width = 104; wa.height = 112;
-        const wax = wa.getContext("2d");
-        for (let i = 0; i < 104; i++) {
-          const phi = (i / 103 - .5) * 2 * phiMax;
-          const sx = (.5 + .5 * Math.sin(phi) / Math.sin(phiMax)) * 103;
-          wax.drawImage(t, sx, 0, 1, 112, i, 0, 1, 112);
+        phx.fillStyle = m; phx.fillRect(-256, -272, 512, 544);
+        phx.restore();
+        const src = phx.getImageData(0, 0, 512, 544).data;
+
+        // --- projective bake over the front hemisphere (u in .25...75) ---
+        const region = fx.getImageData(256, 0, 512, 512);
+        const d = region.data;
+        const KX = .52, KY = .54; // photo coverage of the silhouette extents
+        for (let j = 0; j < 512; j++) {
+          const theta = ((j + .5) / 512) * Math.PI;
+          const st = Math.sin(theta), Y = Math.cos(theta);
+          for (let i = 0; i < 512; i++) {
+            const phi = ((256 + i + .5) / 1024) * 2 * Math.PI;
+            const X = -Math.cos(phi) * st;     // unit-sphere front axis
+            if (X <= .04) continue;
+            const Z = Math.sin(phi) * st;
+            const pu = .5 - Z * KX, pv = .5 - Y * KY; // orthographic projection
+            if (pu < 0 || pu >= 1 || pv < 0 || pv >= 1) continue;
+            const sxp = pu * 511, syp = pv * 543;
+            const x0 = sxp | 0, y0 = syp | 0;
+            const x1 = Math.min(x0 + 1, 511), y1 = Math.min(y0 + 1, 543);
+            const fxr = sxp - x0, fyr = syp - y0;
+            const idx = (yy, xx) => (yy * 512 + xx) * 4;
+            const bl = ch => {
+              const a = src[idx(y0, x0) + ch] * (1 - fxr) + src[idx(y0, x1) + ch] * fxr;
+              const b = src[idx(y1, x0) + ch] * (1 - fxr) + src[idx(y1, x1) + ch] * fxr;
+              return a * (1 - fyr) + b * fyr;
+            };
+            // fade out approaching the silhouette so the wrap is seamless
+            let t = (X - .06) / .22; t = t < 0 ? 0 : t > 1 ? 1 : t;
+            const a = (bl(3) / 255) * (t * t * (3 - 2 * t));
+            if (a <= 0) continue;
+            const o = (j * 512 + i) * 4;
+            d[o]     = bl(0) * a + d[o]     * (1 - a);
+            d[o + 1] = bl(1) * a + d[o + 1] * (1 - a);
+            d[o + 2] = bl(2) * a + d[o + 2] * (1 - a);
+          }
         }
-        const wb = document.createElement("canvas");
-        wb.width = 104; wb.height = 112;
-        const wbx = wb.getContext("2d");
-        for (let j = 0; j < 112; j++) {
-          const th = (j / 111 - .5) * 2 * thMax;
-          const sy = (.5 + .5 * Math.sin(th) / Math.sin(thMax)) * 111;
-          wbx.drawImage(wa, 0, sy, 104, 1, 0, j, 104, 1);
-        }
-        fx.drawImage(wb, 76, 8);
+        fx.putImageData(region, 256, 0);
         faceTex.needsUpdate = true;
       };
       im.src = FACE_SRC;
     }
+    // photo lighting is baked in, so the face is driven mostly by emissive
+    // (unlit) with a low diffuse term keeping a soft 3D rim at the edges
     kHead = new THREE.Mesh(new THREE.SphereGeometry(.36, 32, 24),
       new THREE.MeshStandardMaterial({
-        map: faceTex, roughness: .85,
-        // emissive lift keeps the face readable even on the shadow side
-        emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: .3 }));
+        map: faceTex, color: 0x555555, roughness: .9,
+        emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: .8 }));
     kHead.scale.set(.88, 1.18, .92); // ellipsoid head
     kHead.position.y = 1.62;
     kPaddle = new THREE.Group();
