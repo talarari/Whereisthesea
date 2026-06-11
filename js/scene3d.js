@@ -9,7 +9,7 @@ const SCENE3D = (() => {
   let cine = null;            // launch cinematic state {t0, success, cb, splashed}
   const boats = [], gulls = [], clouds = [];
   let buoy = null, kayaker = null, kPaddle = null, kHead = null;
-  const FACE_SRC = "assets/face.jpg";
+  const HEAD_SRC = "assets/head.png";
 
   // time-of-day palettes (?tod=day|sunset|night to preview)
   const PAL = {
@@ -276,63 +276,13 @@ const SCENE3D = (() => {
     };
     // round head: the face is painted onto the front of an equirect canvas
     // (hair tone everywhere else), so it wraps a sphere naturally
-    const faceCanvas = document.createElement("canvas");
-    faceCanvas.width = 256; faceCanvas.height = 128;
-    {
-      // South Park-style head: skin tone all around, hair cap over the
-      // crown and back, and the whole photo compressed onto the visible
-      // front hemisphere, feathered into the skin so nothing crops.
-      const fx = faceCanvas.getContext("2d");
-      const SKIN = "#c08e66", HAIR = "#2a1d13";
-      fx.fillStyle = SKIN; fx.fillRect(0, 0, 256, 128);
-      fx.fillStyle = HAIR;
-      fx.fillRect(0, 0, 256, 22);                 // crown
-      fx.fillRect(0, 0, 60, 60); fx.fillRect(196, 0, 60, 60); // back of head
-      const soft = (x0, x1, y0, y1, vertical) => {
-        const g = vertical ? fx.createLinearGradient(0, y0, 0, y1)
-                           : fx.createLinearGradient(x0, 0, x1, 0);
-        g.addColorStop(0, "rgba(42,29,19,1)"); g.addColorStop(1, "rgba(42,29,19,0)");
-        fx.fillStyle = g;
-        fx.fillRect(Math.min(x0, x1), Math.min(y0, y1),
-                    Math.abs(x1 - x0) || (vertical ? 256 : 0) || 256,
-                    Math.abs(y1 - y0) || 128);
-      };
-      // feathered hair edges
-      let g = fx.createLinearGradient(0, 22, 0, 34);
-      g.addColorStop(0, "rgba(42,29,19,1)"); g.addColorStop(1, "rgba(42,29,19,0)");
-      fx.fillStyle = g; fx.fillRect(0, 22, 256, 12);
-      g = fx.createLinearGradient(60, 0, 78, 0);
-      g.addColorStop(0, "rgba(42,29,19,1)"); g.addColorStop(1, "rgba(42,29,19,0)");
-      fx.fillStyle = g; fx.fillRect(60, 0, 18, 60);
-      g = fx.createLinearGradient(196, 0, 178, 0);
-      g.addColorStop(0, "rgba(42,29,19,1)"); g.addColorStop(1, "rgba(42,29,19,0)");
-      fx.fillStyle = g; fx.fillRect(178, 0, 18, 60);
-      const im = new Image();
-      im.onload = () => {
-        // whole face in the front ~135 degrees, oval-feathered into skin
-        const t = document.createElement("canvas");
-        t.width = 96; t.height = 104;
-        const tx = t.getContext("2d");
-        tx.drawImage(im, 0, 0, 96, 104);
-        tx.globalCompositeOperation = "destination-in";
-        tx.save();
-        tx.translate(48, 52); tx.scale(1, 104 / 96);
-        const m = tx.createRadialGradient(0, 0, 24, 0, 0, 44);
-        m.addColorStop(0, "rgba(0,0,0,1)");
-        m.addColorStop(.72, "rgba(0,0,0,1)");
-        m.addColorStop(1, "rgba(0,0,0,0)");
-        tx.fillStyle = m; tx.fillRect(-48, -52, 96, 104);
-        tx.restore();
-        fx.drawImage(t, 80, 12);
-        faceTex.needsUpdate = true;
-      };
-      im.src = FACE_SRC;
-    }
-    const faceTex = new THREE.CanvasTexture(faceCanvas);
-    kHead = new THREE.Mesh(new THREE.SphereGeometry(.36, 28, 20),
-      new THREE.MeshStandardMaterial({ map: faceTex, roughness: .75 }));
-    kHead.scale.set(.82, 1.14, .88); // ellipsoid head
-    kHead.position.y = 1.62;
+    // 2D cutout head: a billboard sprite with the photo cutout — always
+    // faces the camera, no sphere wrapping, no distortion
+    const headTex = new THREE.TextureLoader().load(HEAD_SRC);
+    kHead = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: headTex, transparent: true, depthWrite: false }));
+    kHead.scale.set(.78, 1.01, 1);
+    kHead.position.y = 1.66;
     kPaddle = new THREE.Group();
     const kShaft = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 2.7, 8),
       new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: .6 }));
@@ -522,8 +472,6 @@ const SCENE3D = (() => {
       kayaker.rotation.x = Math.sin(t * 2.4) * .07;   // roll with each stroke
       kayaker.rotation.z = Math.sin(t * 1.1) * .04;   // pitch over the swell
       kPaddle.rotation.x = Math.sin(t * 2.4) * .55;   // alternate blade dips
-      // keep his glance on the player whichever way he's heading
-      kHead.rotation.y = -1.62 - kayaker.userData.yaw; // face holds on the player through turns
     }
 
     const cam = { cx: 0, cy: 3.1, cz: 8.5, lx: 0, ly: 1.5, lz: -40 };
