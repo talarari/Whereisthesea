@@ -321,21 +321,43 @@ const SCENE3D = (() => {
         g = fx.createLinearGradient(198, 0, 176, 0);
         g.addColorStop(0, cssA(hair, 1)); g.addColorStop(1, cssA(hair, 0));
         fx.fillStyle = g; fx.fillRect(176, 0, 22, 58);
-        // the whole face across the front ~140 degrees, oval-feathered
+        // the whole face across the front, oval-feathered
         const t = document.createElement("canvas");
-        t.width = 100; t.height = 106;
+        t.width = 104; t.height = 112;
         const tx = t.getContext("2d");
-        tx.drawImage(im, 10, 2, 108, 142, 0, 0, 100, 106); // trim photo edges (curtain)
+        tx.drawImage(im, 10, 2, 108, 142, 0, 0, 104, 112); // trim photo edges (curtain)
         tx.globalCompositeOperation = "destination-in";
         tx.save();
-        tx.translate(50, 53); tx.scale(1, 106 / 100);
-        const m = tx.createRadialGradient(0, 0, 26, 0, 0, 47);
+        tx.translate(52, 56); tx.scale(1, 112 / 104);
+        const m = tx.createRadialGradient(0, 0, 27, 0, 0, 49);
         m.addColorStop(0, "rgba(0,0,0,1)");
         m.addColorStop(.74, "rgba(0,0,0,1)");
         m.addColorStop(1, "rgba(0,0,0,0)");
-        tx.fillStyle = m; tx.fillRect(-50, -53, 100, 106);
+        tx.fillStyle = m; tx.fillRect(-52, -56, 104, 112);
         tx.restore();
-        fx.drawImage(t, 78, 11);
+        // Pre-warp with the inverse spherical (arcsin) mapping so the face
+        // appears flat from the front instead of fish-eyed: texture pixels
+        // are packed toward the silhouette and relaxed at the center,
+        // cancelling the sphere's bulge.
+        const phiMax = (104 / 256) * Math.PI;        // half horizontal span
+        const thMax = (112 / 128) * (Math.PI / 2);   // half vertical span
+        const wa = document.createElement("canvas");
+        wa.width = 104; wa.height = 112;
+        const wax = wa.getContext("2d");
+        for (let i = 0; i < 104; i++) {
+          const phi = (i / 103 - .5) * 2 * phiMax;
+          const sx = (.5 + .5 * Math.sin(phi) / Math.sin(phiMax)) * 103;
+          wax.drawImage(t, sx, 0, 1, 112, i, 0, 1, 112);
+        }
+        const wb = document.createElement("canvas");
+        wb.width = 104; wb.height = 112;
+        const wbx = wb.getContext("2d");
+        for (let j = 0; j < 112; j++) {
+          const th = (j / 111 - .5) * 2 * thMax;
+          const sy = (.5 + .5 * Math.sin(th) / Math.sin(thMax)) * 111;
+          wbx.drawImage(wa, 0, sy, 104, 1, 0, j, 104, 1);
+        }
+        fx.drawImage(wb, 76, 8);
         faceTex.needsUpdate = true;
       };
       im.src = FACE_SRC;
@@ -345,7 +367,7 @@ const SCENE3D = (() => {
         map: faceTex, roughness: .85,
         // emissive lift keeps the face readable even on the shadow side
         emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: .3 }));
-    kHead.scale.set(.82, 1.14, .88); // ellipsoid head
+    kHead.scale.set(.88, 1.18, .92); // ellipsoid head
     kHead.position.y = 1.62;
     kPaddle = new THREE.Group();
     const kShaft = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 2.7, 8),
