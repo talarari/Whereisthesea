@@ -16,7 +16,7 @@ Play → send the result screenshot back → challenge them back.
   - `js/scene3d.js` — the Three.js ocean scene
   - `js/sound.js` — synthesized WebAudio
   - `js/app.js` — game flow and sharing
-  - `vendor/three.min.js` (r149), `assets/head.png`
+  - `vendor/three.min.js` (r149), `assets/face.jpg`
 - **Full 3D presentation**: shader-animated ocean with sailboats, seagulls,
   clouds and a bobbing buoy, time-of-day palettes (day/sunset/night —
   preview with `?tod=night`), a storm that builds as the timer runs out, a

@@ -9,7 +9,7 @@ const SCENE3D = (() => {
   let cine = null;            // launch cinematic state {t0, success, cb, splashed}
   const boats = [], gulls = [], clouds = [];
   let buoy = null, kayaker = null, kPaddle = null, kHead = null;
-  const HEAD_SRC = "assets/head.png";
+  const FACE_SRC = "assets/face.jpg";
 
   // time-of-day palettes (?tod=day|sunset|night to preview)
   const PAL = {
@@ -276,13 +276,77 @@ const SCENE3D = (() => {
     };
     // round head: the face is painted onto the front of an equirect canvas
     // (hair tone everywhere else), so it wraps a sphere naturally
-    // 2D cutout head: a billboard sprite with the photo cutout — always
-    // faces the camera, no sphere wrapping, no distortion
-    const headTex = new THREE.TextureLoader().load(HEAD_SRC);
-    kHead = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: headTex, transparent: true, depthWrite: false }));
-    kHead.scale.set(.78, 1.01, 1);
-    kHead.position.y = 1.66;
+    // South Park-style 3D head: an ellipsoid with the whole face on the
+    // visible front, blended into skin/hair tones sampled from the photo
+    // itself so the seams are invisible.
+    const faceCanvas = document.createElement("canvas");
+    faceCanvas.width = 256; faceCanvas.height = 128;
+    const faceTex = new THREE.CanvasTexture(faceCanvas);
+    {
+      const fx = faceCanvas.getContext("2d");
+      fx.fillStyle = "#c08e66"; fx.fillRect(0, 0, 256, 128); // until photo loads
+      const im = new Image();
+      im.onload = () => {
+        // sample real skin and hair tones from the photo
+        const probe = document.createElement("canvas");
+        probe.width = im.naturalWidth; probe.height = im.naturalHeight;
+        const px = probe.getContext("2d");
+        px.drawImage(im, 0, 0);
+        const grab = (u, v) => {
+          const d = px.getImageData(Math.round(u * probe.width),
+                                    Math.round(v * probe.height), 1, 1).data;
+          return [d[0], d[1], d[2]];
+        };
+        const avg = pts => {
+          const c = pts.map(p => grab(p[0], p[1]))
+            .reduce((a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], [0, 0, 0]);
+          return c.map(v => Math.round(v / pts.length));
+        };
+        const skin = avg([[.30, .52], [.70, .52], [.50, .70]]); // cheeks + chin
+        const hair = avg([[.42, .07], [.58, .07], [.50, .04]]); // top of head
+        const css = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+        const cssA = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+        // base skin everywhere
+        fx.fillStyle = css(skin); fx.fillRect(0, 0, 256, 128);
+        // hair: crown band + back of the head, feathered
+        fx.fillStyle = css(hair);
+        fx.fillRect(0, 0, 256, 20);
+        fx.fillRect(0, 0, 58, 58); fx.fillRect(198, 0, 58, 58);
+        let g = fx.createLinearGradient(0, 20, 0, 36);
+        g.addColorStop(0, cssA(hair, 1)); g.addColorStop(1, cssA(hair, 0));
+        fx.fillStyle = g; fx.fillRect(0, 20, 256, 16);
+        g = fx.createLinearGradient(58, 0, 80, 0);
+        g.addColorStop(0, cssA(hair, 1)); g.addColorStop(1, cssA(hair, 0));
+        fx.fillStyle = g; fx.fillRect(58, 0, 22, 58);
+        g = fx.createLinearGradient(198, 0, 176, 0);
+        g.addColorStop(0, cssA(hair, 1)); g.addColorStop(1, cssA(hair, 0));
+        fx.fillStyle = g; fx.fillRect(176, 0, 22, 58);
+        // the whole face across the front ~140 degrees, oval-feathered
+        const t = document.createElement("canvas");
+        t.width = 100; t.height = 106;
+        const tx = t.getContext("2d");
+        tx.drawImage(im, 10, 2, 108, 142, 0, 0, 100, 106); // trim photo edges (curtain)
+        tx.globalCompositeOperation = "destination-in";
+        tx.save();
+        tx.translate(50, 53); tx.scale(1, 106 / 100);
+        const m = tx.createRadialGradient(0, 0, 26, 0, 0, 47);
+        m.addColorStop(0, "rgba(0,0,0,1)");
+        m.addColorStop(.74, "rgba(0,0,0,1)");
+        m.addColorStop(1, "rgba(0,0,0,0)");
+        tx.fillStyle = m; tx.fillRect(-50, -53, 100, 106);
+        tx.restore();
+        fx.drawImage(t, 78, 11);
+        faceTex.needsUpdate = true;
+      };
+      im.src = FACE_SRC;
+    }
+    kHead = new THREE.Mesh(new THREE.SphereGeometry(.36, 32, 24),
+      new THREE.MeshStandardMaterial({
+        map: faceTex, roughness: .85,
+        // emissive lift keeps the face readable even on the shadow side
+        emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: .3 }));
+    kHead.scale.set(.82, 1.14, .88); // ellipsoid head
+    kHead.position.y = 1.62;
     kPaddle = new THREE.Group();
     const kShaft = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 2.7, 8),
       new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: .6 }));
@@ -472,6 +536,8 @@ const SCENE3D = (() => {
       kayaker.rotation.x = Math.sin(t * 2.4) * .07;   // roll with each stroke
       kayaker.rotation.z = Math.sin(t * 1.1) * .04;   // pitch over the swell
       kPaddle.rotation.x = Math.sin(t * 2.4) * .55;   // alternate blade dips
+      // keep his face on the player whichever way he's heading
+      kHead.rotation.y = -1.62 - kayaker.userData.yaw;
     }
 
     const cam = { cx: 0, cy: 3.1, cz: 8.5, lx: 0, ly: 1.5, lz: -40 };
